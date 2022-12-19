@@ -1,0 +1,4 @@
+l=`readlink node_modules/c`
+test "$l" = "../debian/tests/test_modules/c"
+l=`readlink node_modules/@a/b`
+test "$l" = "../../debian/tests/test_modules/@a/b"

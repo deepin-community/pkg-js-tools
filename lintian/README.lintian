@@ -1,0 +1,27 @@
+Use the installed pkg-js-extra lintian profile
+==========================================
+
+Call lintian with `--profile pkg-js-extra' or add
+"LINTIAN_PROFILE=pkg-js-extra" to your .lintianrc or set the
+environment variable.
+
+Use the pkg-js lintian profiles from the git clone
+====================================================
+
+Call lintian with "--include-dir $CHECKOUT/lintian" and again `--profile
+pkg-js-extra' or the setting mentioned above.
+
+
+Write additional checks
+=======================
+
+* Copy an existing one :)
+* Add the new one to lintian/profiles/pkg-js-extra/main.profile.
+* Read the docs:
+  file:///usr/share/doc/lintian/api.html/index.html , especially
+  file:///usr/share/doc/lintian/api.html/Lintian/Tutorial/WritingChecks.html
+  and file:///usr/share/doc/lintian/lintian.html/section-3.3.html --
+  the latter is also online at
+  http://lintian.debian.org/manual/section-3.3.html
+  perldoc Lintian::Collect
+  perldoc Lintian::Tags

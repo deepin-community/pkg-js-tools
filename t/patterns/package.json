@@ -1,0 +1,10 @@
+{
+ "name":"foo",
+ "version":"0.1",
+ "files": [
+   "*.js",
+   "lib/**/*.js",
+   "partial/!excluded",
+   "dst/{css,js}"
+ ]
+}

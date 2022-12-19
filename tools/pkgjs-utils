@@ -1,0 +1,193 @@
+#!/usr/bin/perl
+
+use strict;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+use JSON;
+use Pod::Usage;
+use Pod::Text;
+
+my $cmd = $0 =~ m#/pkgjs-(ln|pjson|main)$# ? $1 : shift(@ARGV);
+
+pod2usage(
+    -message => 'Missing command',
+    -exitval => 1,
+) unless $cmd;
+
+pod2usage(
+    -message => 'Bad command',
+    -exitval => 2,
+  )
+
+  # $ regexp-assemble <<EOF
+  # link_test_modules
+  # link_build_modules
+  # clean_test_modules
+  # clean_build_modules
+  # ln
+  # components_list
+  # modules_list
+  # pjson
+  # main
+  # -h
+  # -v
+  # --help
+  # --version
+  # EOF
+  unless $cmd =~
+/^(?:c(?:lean_(?:build|test)_modules|omponents_list)|l(?:ink_(?:build|test)_modules|n)|-(?:[hv]|-(?:version|help))|m(?:odules_list|ain)|pjson)/;
+
+our $obj = bless {}, 'Debian::PkgJs::Utils';
+
+use constant _sub => {
+    '-v' => sub {
+        return $VERSION;
+    },
+    '-h' => sub {
+        return pod2usage( -verbose => 2 );
+    },
+    main => sub {
+        return $obj->pjson( $obj->main_package );
+    },
+    components_list => sub {
+        my $res = $obj->component_list;
+        return join( '', map { "$_\n" } sort keys %$res );
+    },
+    modules_list => sub {
+        my $res = $obj->component_list;
+        return
+          join( '', map { $obj->pjson($_)->{name} . "\n" } sort keys %$res );
+    },
+    pjson => sub {
+        my $cmp = shift(@ARGV) || '.';
+        my $res = $obj->pjson($cmp);
+        while ( $_ = shift @ARGV ) {
+            if ( ref $res ) {
+                if ( defined $res->{$_} ) {
+                    $res = $res->{$_};
+                }
+                else {
+                    die "Unable to find $_ in $cmp/package.json" if (@ARGV);
+                    $res = '';
+                }
+            }
+            else {
+                pod2usage(
+                    -message => 'Bad json path',
+                    -exitval => 3,
+                );
+            }
+        }
+        my $ref = ref($res) || '';
+        return
+            $ref eq 'HASH'  ? JSON::to_json($res)
+          : $ref eq 'ARRAY' ? join( "\n", @$res )
+          :                   $res;
+    },
+    main => sub {
+        my $dir = '.';
+        if ( -e 'debian/nodejs/main' ) {
+            local $/ = undef;
+            open my $f, 'debian/nodejs/main' or die $!;
+            $dir = <$f>;
+            close $f;
+            $dir =~ s/\s//g;
+        }
+        return $obj->pjson($dir)->{name};
+    },
+    ln => sub {
+        my $mod = shift @ARGV;
+        my $res = $obj->ln($mod);
+        return "'$mod' linked into node_modules" if $res;
+        print STDERR "Unable to link $mod: $!";
+        exit 1;
+    },
+    link_build_modules => sub {
+        $obj->link_build_modules;
+        return '';
+    },
+    link_test_modules => sub {
+        $obj->link_test_modules;
+        return '';
+    },
+    clean_build_modules => sub {
+        $obj->clean_build_modules;
+        return '';
+    },
+    clean_test_modules => sub {
+        $obj->clean_test_modules;
+        return '';
+    },
+};
+
+_sub->{'--version'} = _sub->{'-v'};
+_sub->{'--help'}    = _sub->{'-h'};
+
+my $res = _sub->{$cmd}->();
+chomp $res;
+print $res. ( $res =~ /./ ? "\n" : '' );
+__END__
+=head1 NAME
+
+pkgjs-utils - Nodejs package utilities
+
+=head1 SYNOPSIS
+
+  $ cd node-glob
+  $ pkgjs-utils main
+    # prints: glob
+  $ pkgjs-main
+    # alias for pkgjs-utils main
+  $ pkgjs-utils components_list
+    # prints:
+    #  globalyzer
+    #  globrex
+    #  tiny-glob
+    #  types-glob
+  $ pkgjs-utils modules_list
+    # prints:
+    #  globalyzer
+    #  globrex
+    #  tiny-glob
+    #  @types/glob
+  $ pkgjs-utils pjson .
+    # prints: { <package.json content, serialized> }
+  $ pkgjs-pjson .
+    # alias for pkgjs-utils pjson .
+  $ cd ../node-jest
+  $ pkgjs-pjson packages/jest-diff
+    # prints: { <packages/jest-diff/package.json content, serialized> }
+  $ pkgjs-pjson packages/jest-diff version
+    # prints: 27.2.5
+  $ pkgjs-utils pjson . scripts test
+    # prints: jest
+  $ pkgjs-utils pjson packages/jest-diff scripts test
+  $ pkgjs-utils ln webpack
+    # prints: 'webpack linked into node_modules
+  $ pkgjs-utils ln @types/node
+    # prints: '@types/node' linked into node_modules
+  $ pkgjs-ln @types/node
+    # same as pkgjs-utils ln @types/node
+
+=head1 DESCRIPTION
+
+Collection of little commands to read <component>/package.json overridden by
+debian/nodejs/<component>/* files.
+
+=head1 AUTHOR
+
+Yadd <yadd@debian.org>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2021 by Yadd <yadd@debian.org>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
+.
+On Debian systems, the complete text of version 2 of the GNU General
+Public License can be found in `/usr/share/common-licenses/GPL-2'
+
+=cut

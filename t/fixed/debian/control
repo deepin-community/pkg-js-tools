@@ -1,0 +1,10 @@
+Source: foo
+Maintainer: Foo <foo@bar.com>
+Section: devel
+Priority: optional
+Build-Depends: debhelper (>= 11~),
+Standards-Version: 4.3.0
+
+Package: foo
+Architecture: all
+Description: Foo

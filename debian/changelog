@@ -1,0 +1,965 @@
+pkg-js-tools (0.9.81) unstable; urgency=medium
+
+  * add-node-component: fix filenamemangle for npm-registry modules
+  * Consider tsconfig.*\.json as makefile
+
+ -- Yadd <yadd@debian.org>  Wed, 17 Nov 2021 09:04:39 +0100
+
+pkg-js-tools (0.9.80) unstable; urgency=medium
+
+  * debhelper:
+    + more strict on excluded directories
+    + really authorize "." in virtual package names
+
+ -- Yadd <yadd@debian.org>  Sat, 06 Nov 2021 18:49:50 +0100
+
+pkg-js-tools (0.9.79) unstable; urgency=medium
+
+  * autopkgtest: fix when no test and -e debian/build_modules
+
+ -- Yadd <yadd@debian.org>  Thu, 04 Nov 2021 05:48:26 +0100
+
+pkg-js-tools (0.9.78) unstable; urgency=medium
+
+  * autopkgtest: clean STDERR
+  * debhelper: install links in auto_install dir, not package one
+
+ -- Yadd <yadd@debian.org>  Sat, 30 Oct 2021 09:09:10 +0200
+
+pkg-js-tools (0.9.77) unstable; urgency=medium
+
+  * add-node-component: update banned list based on recently removed packages
+  * Partial revert of 0.9.76: "." is a bad character only for component name,
+    not for virtual package names
+
+ -- Yadd <yadd@debian.org>  Fri, 22 Oct 2021 18:09:58 +0200
+
+pkg-js-tools (0.9.76) unstable; urgency=medium
+
+  * pkgjs-utils:
+    + add pkgjs-ln, pkgjs-main and pkgjs-pjson aliases for
+      `pkgjs-utils <cmd>`
+    + fix main command
+  * Update pkgjs-ls
+  * Fix provided field (replace ".")
+
+ -- Yadd <yadd@debian.org>  Fri, 22 Oct 2021 17:09:05 +0200
+
+pkg-js-tools (0.9.75) unstable; urgency=medium
+
+  * pkgjs-utils: add commands:
+    + ln
+    + link_build_modules
+    + link_test_modules
+    + list_build_modules
+    + list_test_modules
+    + clean_build_modules
+    + clean_test_modules
+  * pkg-js-autopkgtest (test stage):
+    + link root modules in node_modules
+    + copy debian/build_modules in node_modules
+
+ -- Yadd <yadd@debian.org>  Tue, 19 Oct 2021 09:19:33 +0200
+
+pkg-js-tools (0.9.74) unstable; urgency=medium
+
+  * Fix clean for extcopies/extlinks
+  * Fix filenamemangle fields
+
+ -- Yadd <yadd@debian.org>  Sat, 16 Oct 2021 09:27:18 +0200
+
+pkg-js-tools (0.9.73) unstable; urgency=medium
+
+  * tools: add pkgjs-utils
+  * add-node-component: add banned list
+  * autopkgtest: display "Package is a ES module" if require test fails and
+    module is an ES module
+  * debhelper: manage path expressions like "partial/!excluded"
+
+ -- Yadd <yadd@debian.org>  Sun, 10 Oct 2021 12:23:54 +0200
+
+pkg-js-tools (0.9.72) unstable; urgency=medium
+
+  * debhelper: fix regression introduced in 0.9.71 when additional component
+    is a "@foo/bar"
+
+ -- Yadd <yadd@debian.org>  Wed, 06 Oct 2021 09:52:24 +0200
+
+pkg-js-tools (0.9.71) unstable; urgency=medium
+
+  [ Ajayi Olatunji O ]
+  * update doc/tools/README.md to contain info for debian/tests/pkg-js/files
+
+  [ Yadd ]
+  * debhelper: fix pjson() when package.json doesn't exist but
+    debian/nodejs/name is defined
+
+ -- Yadd <yadd@debian.org>  Sun, 03 Oct 2021 18:17:10 +0200
+
+pkg-js-tools (0.9.70) unstable; urgency=medium
+
+  * Replace nodejs dependency by "nodejs:any | nodejs (<<12.22.5~dfsg-4~)"
+
+ -- Yadd <yadd@debian.org>  Thu, 23 Sep 2021 17:52:19 +0200
+
+pkg-js-tools (0.9.69) unstable; urgency=medium
+
+  * add-node-component: able to list components/modules (Closes: #994934)
+
+ -- Yadd <yadd@debian.org>  Thu, 23 Sep 2021 15:49:09 +0200
+
+pkg-js-tools (0.9.68) unstable; urgency=medium
+
+  * pkg-js-tools MA: foreign (Closes: #994678)
+
+ -- Yadd <yadd@debian.org>  Mon, 20 Sep 2021 14:09:56 +0200
+
+pkg-js-tools (0.9.67) unstable; urgency=medium
+
+  * Update clean: drop self link (exists if test failed)
+  * Depends on nodejs:any instead of nodejs (Closes: #994566)
+
+ -- Yadd <yadd@debian.org>  Mon, 20 Sep 2021 06:11:31 +0200
+
+pkg-js-tools (0.9.66) unstable; urgency=medium
+
+  [ Jérémy Lal ]
+  * nodepath: use -p instead of -e console.log
+
+  [ Yadd ]
+  * Declare compliance with policy 4.6.0
+  * Don't follow upstream +x permission for js/json/ts files (Closes: #993454)
+
+ -- Yadd <yadd@debian.org>  Thu, 02 Sep 2021 08:51:22 +0200
+
+pkg-js-tools (0.9.65) unstable; urgency=medium
+
+  * Force package.json install even if removed by .npmignore (Closes: #988194)
+
+ -- Yadd <yadd@debian.org>  Mon, 10 May 2021 20:03:59 +0200
+
+pkg-js-tools (0.9.64) unstable; urgency=medium
+
+  * Fix doc, thanks to Andrius Merkys (Closes: #980549)
+  * Set SALSA_CI_CONFIG_PATH to "debian/salsa-ci.yml" in pkg-js-salsa.conf
+  * Fix GitHub tags template
+  * Update copyright
+
+ -- Yadd <yadd@debian.org>  Sat, 27 Mar 2021 07:12:38 +0100
+
+pkg-js-tools (0.9.63) unstable; urgency=medium
+
+  * autopkgtest: fix regexp that parse debian/nodejs/ext* (Closes: #980195)
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 15 Jan 2021 22:37:59 +0100
+
+pkg-js-tools (0.9.62) unstable; urgency=medium
+
+  * Fix little warning
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 11 Jan 2021 10:11:01 +0100
+
+pkg-js-tools (0.9.61) unstable; urgency=medium
+
+  * Add ava.config.js in build files list
+  * Add possibility to mark extcopies and extlinks with "test": this permits
+    one to avoid regressions due to behavior change introduced by #977744:
+    when building with "nocheck", links/copies marked with "test" are ignored
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 11 Jan 2021 10:04:29 +0100
+
+pkg-js-tools (0.9.60) unstable; urgency=medium
+
+  [ Felix Lechner ]
+  * In Lintian profile, stop using commas as field separators.
+  * Place Lintian checks into their proper Perl name space.
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 06 Jan 2021 23:00:50 +0100
+
+pkg-js-tools (0.9.59) unstable; urgency=medium
+
+  * debhelper:
+    + abort configure step when extlinks/extcopies are not available
+      (Closes: #977744)
+    + fix bad detection of missing "main" file
+  * doc:
+    + indicate that extlinks/extcopies are searched with nodejs algorithm
+    + fix typo in doc. Thanks to Jonas Smedegaard (Closes: #977745)
+  * Add .mocharc in build files list
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 06 Jan 2021 19:13:50 +0100
+
+pkg-js-tools (0.9.58) unstable; urgency=medium
+
+  * Fix version in provides field when package name differs from main
+    component name (Closes: #977677)
+  * pkgjs-depends: display component in package list
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 18 Dec 2020 22:27:58 +0100
+
+pkg-js-tools (0.9.57) unstable; urgency=medium
+
+  * Back to unstable
+  * debhelper: fix .npmignore parsing
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 17 Dec 2020 13:30:56 +0100
+
+pkg-js-tools (0.9.56) experimental; urgency=medium
+
+  * Add jsl.node.conf in build files
+  * autopkgtest: fix links and copies (Closes: #977535)
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 16 Dec 2020 14:57:36 +0100
+
+pkg-js-tools (0.9.55) experimental; urgency=medium
+
+  * Add karma.conf.js in build files list
+  * debhelper:
+    + extcopies: copy with `cp -rL` to fix broken symlinks
+  * autopkgtest:
+    + honor debian/nodejs/extcopies (Closes: #977535)
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 16 Dec 2020 12:10:55 +0100
+
+pkg-js-tools (0.9.54) unstable; urgency=medium
+
+  * New tool: pkgjs-depends (parse dependencies recursively and displays
+              related Debian packages and missing dependencies)
+  * add-node-component:
+    + --cmp-tree: avoid error on bad component name
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 07 Dec 2020 09:49:28 +0100
+
+pkg-js-tools (0.9.53) unstable; urgency=medium
+
+  * Declare compliance with policy 4.5.1
+  * debhelper: workaround bad .npmignore (see node-jsdom)
+  * autopkgtest:
+    + fix build files search when file is hidden
+    + add .babelrc.js and babel.config.json in build files list
+  * add-node-component: add "ctype=nodejs" unless --no-ctype is set
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 01 Dec 2020 16:21:21 +0100
+
+pkg-js-tools (0.9.52) unstable; urgency=medium
+
+  * debhelper:
+    + honor "!foo" expressions in "files" fields
+    + honor .npmignore and its default value (from npm-packlist)
+    + don't fail if main dir isn't created during clean and build
+  * autopkgtest: fix test links
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 25 Nov 2020 23:00:44 +0100
+
+pkg-js-tools (0.9.51) unstable; urgency=medium
+
+  * debhelper: add jest.config.js in makefiles list
+  * autopkgtest:
+    + better module-name parsing
+    + honor debian/nodejs/extlinks
+    + try to link debian/tests/test_modules/* in node_module directory, else
+      keep previous behavior (export NODE_PATH)
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 23 Nov 2020 09:40:31 +0100
+
+pkg-js-tools (0.9.50) unstable; urgency=medium
+
+  * Back to unstable after successful tests
+  * Update documentation
+  * autopkgtest: better output
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 17 Nov 2020 19:03:01 +0100
+
+pkg-js-tools (0.9.49) experimental; urgency=medium
+
+  * autopkgtest:
+    + fix links when tests are in a subdir of installed files
+    + autopkgtest: add tests
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 15 Nov 2020 22:28:55 +0100
+
+pkg-js-tools (0.9.48) experimental; urgency=medium
+
+  * autopkgtest: automatically install makefiles
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 15 Nov 2020 15:33:35 +0100
+
+pkg-js-tools (0.9.47) unstable; urgency=medium
+
+  * debhelper: fix main component name
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 11 Nov 2020 22:38:39 +0100
+
+pkg-js-tools (0.9.46) unstable; urgency=medium
+
+  * debhelper:
+    + exclude gulpfile.ts from install
+    + exclude __*__ directories from install
+    + add the main component to ${nodejs:Provides} if it doesn't match the
+      package name (Closes: #974030)
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 09 Nov 2020 11:51:42 +0100
+
+pkg-js-tools (0.9.45) unstable; urgency=medium
+
+  * debhelper: don't create link if src=dest
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 04 Nov 2020 12:54:07 +0100
+
+pkg-js-tools (0.9.44) unstable; urgency=medium
+
+  * Update doc: explain debian/tests/autopkgtest-pkg-nodejs.conf use
+  * Add-node-component: update character accepted in component names
+  * pkgjs-ls: fix for npm ≥ 7
+  * debhelper:
+    + exclude component.json
+    + exclude READMEs anywhere
+    + fix grunt tests
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 22 Oct 2020 14:55:21 +0200
+
+pkg-js-tools (0.9.43) unstable; urgency=medium
+
+  * debhelper: clean main link
+  * autopkgtest: change directory to / before require test
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 11 Oct 2020 07:39:56 +0200
+
+pkg-js-tools (0.9.42) unstable; urgency=medium
+
+  * debhelper: update doc to use dh-sequence-nodejs
+  * nodepath: fix path error on @foo/bar
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 04 Oct 2020 12:28:32 +0200
+
+pkg-js-tools (0.9.41) unstable; urgency=medium
+
+  * debhelper:
+    + Provides dh-sequence-nodejs (Closes: #970016)
+    + Build node_modules link during test when "main" is not the root
+      directory (Closes: #971361)
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 29 Sep 2020 15:51:50 +0200
+
+pkg-js-tools (0.9.40) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * debian/copyright: use spaces rather than tabs to start continuation lines.
+
+  [ Felix Lechner ]
+  * Change file extension for Lintian tag; rename Info field to Explanation.
+
+  [ Xavier Guimard ]
+  * Bump debhelper compatibility level to 13
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 24 Aug 2020 18:53:51 +0200
+
+pkg-js-tools (0.9.39) unstable; urgency=medium
+
+  * debhelper: improve node.js version detection, thanks to Jonas Smedegaard
+  * lintian:
+    + remove lintian checks which have been incorporated into lintian proper
+
+ -- Xavier Guimard <yadd@debian.org>  Sat, 18 Jul 2020 19:30:21 +0200
+
+pkg-js-tools (0.9.38) unstable; urgency=medium
+
+  [ Felix Lechner ]
+  * Remove Lintian check descriptions; they are obsolete.
+  * Adapt Lintian checks to case-sensitive Deb822 parser.
+
+  [ Xavier Guimard ]
+  * debhelper:
+    + fix component build order
+    + populate ${nodejs:Version} variable
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 10 Jul 2020 12:15:28 +0200
+
+pkg-js-tools (0.9.37) unstable; urgency=medium
+
+  * debcheck-node-repo: able to read git@host:path
+  * debhelper:
+    + link debian/tests/test_modules modules before components test
+    + don't fail during links/copies when a module is missing
+  * Move devscripts to recommended dependencies
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 12 Jun 2020 07:02:02 +0200
+
+pkg-js-tools (0.9.36) unstable; urgency=medium
+
+  * Update doc
+  * debhelper:
+    + use debhelper warning/error functions
+    + exclude Jakefile
+  * add-node-component:
+    + don't fail when git stash reports an error (Closes: #960406)
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 14 May 2020 09:33:04 +0200
+
+pkg-js-tools (0.9.35) unstable; urgency=medium
+
+  * debhelper: fix test_modules links and add test
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 30 Apr 2020 15:29:15 +0200
+
+pkg-js-tools (0.9.34) unstable; urgency=medium
+
+  * Update doc
+  * debhelper: fix build & test links when module is @foo (Closes: #959131)
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 30 Apr 2020 12:57:21 +0200
+
+pkg-js-tools (0.9.33) unstable; urgency=medium
+
+  * debhelper:
+    + link modules found in debian/tests/test_modules in node_modules
+      directory during test step
+    + link modules found in debian/build_modules in node_modules directory
+      during configure step (Closes: #959015)
+  * autopkgtest:
+    + export "NODE_PATH=debian/tests/test_modules:node_modules" when directory
+      debian/tests/test_modules exists
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 29 Apr 2020 12:25:13 +0200
+
+pkg-js-tools (0.9.32) unstable; urgency=medium
+
+  * debhelper: launch sh with -x
+  * autopkgtest: launch sh with -x
+  * pkgjs-ls:
+    + don't color if output isn't a terminal
+    + improve duplication detection
+  * add-node-component:
+    + add --checksum and --no-ctype options
+    + commit also copyright changes
+  * Update salsa configuration file to redirect KGB to #debian-js-changes
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 24 Apr 2020 15:49:54 +0200
+
+pkg-js-tools (0.9.31) unstable; urgency=medium
+
+  * debhelper:
+   + fix paths in file fields
+   + drop grunt.js file
+  * lintian :
+    + update lintian tag description files to lintian 2.58.0, remove Certainty
+      field, and update Severity to the new values (Closes: #954336)
+    + Suggests lintian ≥ 2.58.0~
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 20 Mar 2020 18:03:25 +0100
+
+pkg-js-tools (0.9.30) unstable; urgency=medium
+
+  [ Xavier Guimard ]
+  * New tool: pkgjs-ls
+    + add suggested dependency to node-semver
+  * debhelper:
+    + add warning if name is not found
+    + fix "submodule" field
+    + add debian/nodejs/test to have a distinct test between build and
+      autopkgtest
+    + exclude lerna.conf from auto install
+
+  [ Nilesh Patra ]
+  * autopkgtest: add options to skip "require" and "require" a different
+    file/module than PKG
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 17 Mar 2020 09:57:25 +0100
+
+pkg-js-tools (0.9.29) unstable; urgency=medium
+
+  [ Nilesh Patra ]
+  * add-node-component: switch to use debian-tag while embedding components
+
+  [ Xavier Guimard ]
+  * lintian: add new nodejs-bad-buffer-usage tag
+  * debhelper:
+    + don't install gulpfile.babel.js
+    + don't ignore debian/ dir in component
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 11 Mar 2020 19:01:50 +0100
+
+pkg-js-tools (0.9.28) unstable; urgency=medium
+
+  * debhelper: fix "${nodejs:Provides}" field for "@foo/bar" packages
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 24 Feb 2020 10:19:40 +0100
+
+pkg-js-tools (0.9.27) unstable; urgency=medium
+
+  [ Xavier Guimard ]
+  * debhelper:
+    + Exclude *.c, *.cpp *.c++ *.def
+    + Add debian/nodejs/**/name override file
+    + Authorize to force install of skipped files
+  * add-node-component: update debian/copyright Source field
+  * Declare pkg-js-autopkgtest as "Multi-Arch: foreign"
+
+  [ Nilesh ]
+  * add-node-component: Add gbp.conf and watch before committing, stash and
+    apply rest changes when option -i is set
+
+ -- Xavier Guimard <yadd@debian.org>  Sat, 22 Feb 2020 18:22:23 +0100
+
+pkg-js-tools (0.9.26) unstable; urgency=medium
+
+  * debhelper:
+    + Use DEB_HOST_MULTIARCH to find arch-dep install dir
+    + Exclude cakefile from install
+  * autopkgtest: better fix for source without package.json
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 29 Jan 2020 14:00:02 +0100
+
+pkg-js-tools (0.9.25) unstable; urgency=medium
+
+  * Declare compliance with policy 4.5.0
+  * debhelper:
+    + exclude from install (Closes: #949580):
+      - anywhere: .npmignore, .gitignore, source files (.cc, .h), .deps
+                  directories
+      - from root dir: binding.gyp
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 23 Jan 2020 16:57:44 +0100
+
+pkg-js-tools (0.9.24) unstable; urgency=medium
+
+  * github-debian-upstream: add "Changelog" field
+  * autopkgtest: use installed package.json if no one found (Closes: #949277)
+  * add-node-component: add --force-npm-reg and --force-github-tags options
+    (Closes: #942441, #935824)
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 21 Jan 2020 18:34:38 +0100
+
+pkg-js-tools (0.9.23) unstable; urgency=medium
+
+  * github-debian-upstream:
+    + fix argument parsing
+    + add Bug-Submit field
+  * debhelper:
+    + revert "Fix possibly missing package.json in components" introduced in
+      version 0.9.22
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 03 Jan 2020 09:58:31 +0100
+
+pkg-js-tools (0.9.22) unstable; urgency=medium
+
+  [ Felix Lechner ]
+  * Use new Lintian interface in checks.
+
+  [ Xavier Guimard ]
+  * add-node-component:
+    + cmp-tree: read also debian/nodejs/additional_components
+  * debhelper:
+    + fix extlinks for modules with / in their names
+    + fix possibly missing package.json in components
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 29 Dec 2019 08:50:51 +0100
+
+pkg-js-tools (0.9.21) unstable; urgency=medium
+
+  * debhelper: don't fail on missing component
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 10 Dec 2019 21:18:31 +0100
+
+pkg-js-tools (0.9.20) unstable; urgency=medium
+
+  * debheper:
+    + don't install "licence" files
+    + build links after component install
+  * autopkgtest: use debian/nodejs/main if exist to find package.json
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 10 Dec 2019 21:08:42 +0100
+
+pkg-js-tools (0.9.19) unstable; urgency=medium
+
+  * debhelper:
+    + Fix "main" file install for components
+    + Add related test
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 18 Nov 2019 06:51:08 +0100
+
+pkg-js-tools (0.9.18) unstable; urgency=medium
+
+  * add-node-component:
+    + Don't fail if upstream repo is not set in npm registry (Closes: #942523)
+  * autopkgtest: replace deprecated ADTTMP variable
+  * debhelper:
+    + fix "main" file install when "files" field does not contain it
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 15 Nov 2019 18:18:35 +0100
+
+pkg-js-tools (0.9.17) unstable; urgency=medium
+
+  [ Xavier Guimard ]
+  * debhelper: fix install when no main module is defined
+
+  [ Andrius Merkys ]
+  * Adding dh-make-node (Closes: #941582)
+
+  [ Xavier Guimard ]
+  * add-node-component: better error display (See #941119)
+  * nodepath: better @xx/yy support
+  * debhelper:
+    + add debian/nodejs/extcopies to workaround tsc bugs
+    + install package.json#typings when present (Closes: #942361)
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 16 Oct 2019 22:39:33 +0200
+
+pkg-js-tools (0.9.16) unstable; urgency=medium
+
+  * autopkgtest: initialize HOME variable
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 01 Oct 2019 22:01:07 +0200
+
+pkg-js-tools (0.9.15) unstable; urgency=medium
+
+  * Declare compliance with policy 4.4.1
+  * debhelper: fix install when files field contains "{,}" expressions
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 01 Oct 2019 21:49:36 +0200
+
+pkg-js-tools (0.9.14) unstable; urgency=medium
+
+  * debhelper:
+    + Exclude bench dir and Dockerfile from install (Closes: #940648)
+    + Don't ignore debian/nodejs/extlinks if no components
+    + Install files declared in "types" field (Closes: #941359)
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 29 Sep 2019 22:36:55 +0200
+
+pkg-js-tools (0.9.13) unstable; urgency=medium
+
+  * Fix autopkgtest
+  * Exclude bench*.js files (Closes: #940648)
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 18 Sep 2019 21:06:57 +0200
+
+pkg-js-tools (0.9.12) unstable; urgency=medium
+
+  * Back to unstable
+  * debhelper: fix bad main detection and install
+  * add-node-component: add -u option to launch "cme update dpkg-copyright"
+    (Closes: #935569)
+  * autopkgtest: launch "require" test with --no-deprecation
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 17 Sep 2019 22:36:03 +0200
+
+pkg-js-tools (0.9.11) experimental; urgency=medium
+
+  * debhelper:
+    + add additional_components feature
+    + main module can changed instead of default '.'
+    + main module is no more required
+  * Update doc
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 13 Sep 2019 18:22:01 +0200
+
+pkg-js-tools (0.9.10) unstable; urgency=medium
+
+  * nodepath: return 1 if module not found
+  * add-node-component: add --cmp-tree option
+  * debhelper:
+    + add build order feature
+    + able to install component in nodejs root directory and set
+      ${nodejs:Provides}
+  * Update debian/clean
+  * Update manifest
+  * Update doc
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 09 Sep 2019 21:13:41 +0200
+
+pkg-js-tools (0.9.9) unstable; urgency=medium
+
+  * add-node-component:
+    + don't fail if origin tag does not exist (Closes: #935933)
+    + add "--download-current-version" in default uscan options
+      (Closes: #939093)
+    + add "--uscan-option" option
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 01 Sep 2019 23:10:33 +0200
+
+pkg-js-tools (0.9.8) unstable; urgency=medium
+
+  * autopkgtest: fix bad package.json parsing (Closes: #935299)
+  * debhelper:
+    + Accept Gruntfile.coffee as Grunt file (Closes: #935301)
+    + Add debian/nodejs/links feature to be able to link arch
+      dependent files
+  * Improve manpages
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 25 Aug 2019 09:52:26 +0200
+
+pkg-js-tools (0.9.7) unstable; urgency=medium
+
+  * Enable grunt test only with autopkgtest (Closes: #935029)
+  * github-debian-upstream: remove deprecated "Name" and "Contact" fields
+  * Add nodejs in pkg-js-tools dependencies (Closes: #935251)
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 21 Aug 2019 10:21:23 +0200
+
+pkg-js-tools (0.9.6) unstable; urgency=medium
+
+  * Fix debhelper sequence return value and update test (Closes: #935016)
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 18 Aug 2019 08:28:28 +0200
+
+pkg-js-tools (0.9.5) unstable; urgency=medium
+
+  * add-node-component:
+    + fallback to registry if no git tags
+    + fix registry build
+    + fix bad registry url if component looks like @foo/bar
+    + new command: del-node-component (symlink) which enables new "-r" option
+  * debhelper:
+    + test components before main (build only)
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 15 Aug 2019 11:36:46 +0200
+
+pkg-js-tools (0.9.4) unstable; urgency=medium
+
+  * add-node-component:
+    + fix warning in help
+    + fix uscan bug workaround
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 12 Aug 2019 18:42:21 +0200
+
+pkg-js-tools (0.9.3) unstable; urgency=medium
+
+  * Release auto_build in unstable with only grunt support:
+    + add grunt test
+    + disable gulp test
+    + replace gulp by grunt in build dependencies
+    + add devscripts and git-buildpackage in suggested dependencies
+  * add-node-component:
+    + add import feature (Closes: #934456)
+    + remove sign-tags from gbp.conf default template
+    + able to fix downloaded version
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 12 Aug 2019 16:26:59 +0200
+
+pkg-js-tools (0.9.2) experimental; urgency=medium
+
+  * Import 0.8.14 changes
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 11 Aug 2019 12:10:33 +0200
+
+pkg-js-tools (0.9.1) experimental; urgency=medium
+
+  * Rebuild with 0.8.13 changes
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 08 Aug 2019 15:23:06 +0200
+
+pkg-js-tools (0.9.0) experimental; urgency=medium
+
+  * Update doc
+  * Add auto_build feature (Closes: #845043)
+  * Update doc
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 07 Aug 2019 22:13:03 +0200
+
+pkg-js-tools (0.8.14) unstable; urgency=medium
+
+  * New commands:
+    - debcheck-node-repo: repo consistency check
+    - add-node-component: automatically update d/watch and d/gbp.conf
+  * lintian profile:
+    - add repo consistency check in new "pkg-js-extra" profile
+    - install and fix lintian tags (Closes: #934144)
+  * Update doc
+  * Switch package to native Pkg-Perl
+  * Fix manpages
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 11 Aug 2019 09:10:43 +0200
+
+pkg-js-tools (0.8.13) unstable; urgency=medium
+
+  * Fix component links when package name contains /
+  * Add "extlinks" feature
+  * Update doc
+  * Always remove node_modules/.cache (Closes: #934214)
+  * Don't die if "main" file does not exist
+  * Add component test feature (build only)
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 08 Aug 2019 15:03:54 +0200
+
+pkg-js-tools (0.8.12) unstable; urgency=medium
+
+  * Update doc
+  * Add .gitlab-ci.yml
+  * Fix ci
+  * Fix package-lock exclusion
+  * Update doc
+  * Update lintian profile due to lintian changes (Closes: #934144)
+  * Add allow-stderr in autopkgtest control, fixes debci
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 07 Aug 2019 15:34:37 +0200
+
+pkg-js-tools (0.8.11) unstable; urgency=medium
+
+  * Fix nodepath when module is not directly usable (Closes: #933862)
+  * Fix bad .eslintrc.js parsing (Closes: #933847)
+  * Install package.json#main if missing in files field (Closes: #933841)
+  * Search "files" field value with ".js" (Closes: #933956)
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 06 Aug 2019 09:37:28 +0200
+
+pkg-js-tools (0.8.10) unstable; urgency=medium
+
+  * Back to unstable after tests
+  * Exclude appveyor.yml
+  * Fix "**/" parsing
+  * Improve tests
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 04 Aug 2019 08:44:18 +0200
+
+pkg-js-tools (0.8.9) experimental; urgency=medium
+
+  * Fix bad regexp for excluded dirs
+  * Exclude Changes, tsconfig.json, .eslint files
+  * Fix priority in ignored files
+  * Improve tests
+  * Fix pattern search
+
+ -- Xavier Guimard <yadd@debian.org>  Sat, 03 Aug 2019 09:10:40 +0200
+
+pkg-js-tools (0.8.8) experimental; urgency=medium
+
+  * auto_install:
+    * Exclude package-lock, yarn.lock and makefiles
+    * Update doc
+    * Fix "files" pattern
+    * Build ignored files/dirs regexp during build
+    * Apply ignored regexp only on root directory
+  * autopkgtest: don't die if link target exists
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 02 Aug 2019 09:02:47 +0200
+
+pkg-js-tools (0.8.7) experimental; urgency=medium
+
+  * Fix "readme" regex
+  * Add "simple" test
+  * Better filtering
+  * Manage "*" in "files" field
+
+ -- Xavier Guimard <yadd@debian.org>  Wed, 31 Jul 2019 15:58:47 +0200
+
+pkg-js-tools (0.8.6) experimental; urgency=medium
+
+  * Reorganize and improve tests
+  * Better install system
+  * Update doc
+  * Fix dependencies
+  * Add double package test
+  * Install even if *.install exists, this will need a transition
+  * Add dh_auto_configure test
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 30 Jul 2019 19:35:43 +0200
+
+pkg-js-tools (0.8.5) experimental; urgency=medium
+
+  * Fix bad install when "files" field is missing
+  * Improve tests
+  * Bump debhelper compatibility level to 12
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 29 Jul 2019 20:21:35 +0200
+
+pkg-js-tools (0.8.4) experimental; urgency=medium
+
+  * Force package.json install. Don't install doc/example directories
+  * Update tests
+  * Update doc
+  * Fix bad install when running under sbuild
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 29 Jul 2019 16:39:32 +0200
+
+pkg-js-tools (0.8.3) experimental; urgency=medium
+
+  * Add auto_install feature for main component (Closes: #933171)
+  * Declare compliance with policy 4.4.0
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 28 Jul 2019 08:59:11 +0200
+
+pkg-js-tools (0.8.2) experimental; urgency=medium
+
+  [ Suman Rajan ]
+  * Typo fix
+  * Update README.md
+
+  [ Xavier Guimard ]
+  * Add nodepath command
+  * Revert rollup test: will be done later using node --experimental-modules
+  * Install automatically components in node_modules/ directory before build,
+    then install automatically components in <module/path>/node_modules
+    (Closes: #933007, #931790)
+
+ -- Xavier Guimard <yadd@debian.org>  Fri, 26 Jul 2019 19:56:47 +0200
+
+pkg-js-tools (0.8.1) experimental; urgency=medium
+
+  * Build custom rollup.config.js for rollup test
+  * Don't launch rollup test during build (revert 0.8 change)
+
+ -- Xavier Guimard <yadd@debian.org>  Thu, 11 Jul 2019 21:34:01 +0200
+
+pkg-js-tools (0.8) experimental; urgency=medium
+
+  * Launch a rollup test every time a "module" field is found
+    (Closes: #930917)
+  * Don't enable KGB in js policy
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 09 Jul 2019 23:11:59 +0200
+
+pkg-js-tools (0.7) unstable; urgency=medium
+
+  * Add pkg-js lintian profile
+  * Fix bad merge in 0.6
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 09 Jul 2019 10:49:16 +0200
+
+pkg-js-tools (0.6) unstable; urgency=medium
+
+  * Search installed files in /usr/share/nodejs and /usr/lib/*/nodejs
+    (Closes: #931675)
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 09 Jul 2019 10:08:29 +0200
+
+pkg-js-tools (0.5) unstable; urgency=medium
+
+  * Fix typo in README.md
+  * Use tar to copy test files
+  * Launch test with "sh -e"
+
+ -- Xavier Guimard <yadd@debian.org>  Tue, 12 Feb 2019 21:50:37 +0100
+
+pkg-js-tools (0.4) unstable; urgency=medium
+
+  * Add homepage
+  * Update nodejs-dev break version
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 04 Feb 2019 21:32:37 +0100
+
+pkg-js-tools (0.3) unstable; urgency=medium
+
+  * Fix autopkgtest error when no test file exists
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 04 Feb 2019 21:25:37 +0100
+
+pkg-js-tools (0.2) unstable; urgency=medium
+
+  [ Jonas Smedegaard ]
+  * Wrap and sort control files and debhelper snippets.
+  * Update copyright info: Use License-Grant and License-Reference fields.
+  * Tidy: Use semantic linefeeds.
+  * Fix mention JavaScript libraries (not Perl modules) in long description.
+
+  [ Xavier Guimard ]
+  * Add autopkgtest control example
+  * Return 77 (skippable) if debian/tests/pkg-js/test is missing
+
+ -- Xavier Guimard <yadd@debian.org>  Mon, 28 Jan 2019 20:52:25 +0100
+
+pkg-js-tools (0.1) unstable; urgency=medium
+
+  * Initial release (Closes: #920350)
+
+ -- Xavier Guimard <yadd@debian.org>  Sun, 27 Jan 2019 09:27:55 +0100

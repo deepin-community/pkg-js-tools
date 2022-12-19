@@ -1,0 +1,33 @@
+# FILES EXCLUDED IN ROOT DIR
+# Hidden files
+\..*
+.*\.txt
+.*\.md
+.*\.pdf
+.*\.markdown
+
+# Doc
+authors?
+changelog
+changes?
+licen[cs]e.*
+history
+copying
+contribute
+
+# Dev files
+autotest\.watchr
+appveyor\.yml
+bower\.json
+binding\.gyp
+component\.json
+
+# Lock files
+package-lock\.json
+yarn\.lock
+
+# Test files
+tests?\.js
+
+# Bench files
+bench.*\.js

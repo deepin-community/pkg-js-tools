@@ -1,0 +1,5 @@
+{
+ "name":"foo",
+ "version":"0.1",
+ "files": [ "*.js","LICENSE", "Changelog.txt", "copying", "!dontinstall.js" ]
+}

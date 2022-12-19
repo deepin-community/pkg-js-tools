@@ -1,0 +1,9 @@
+cross-spawn
+gdal
+gyp-build
+groove
+lodash-compat
+request
+request-promise-core
+simple-is
+stringprep

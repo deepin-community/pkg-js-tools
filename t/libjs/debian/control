@@ -1,0 +1,14 @@
+Source: foo
+Maintainer: Foo <foo@bar.com>
+Section: devel
+Priority: optional
+Build-Depends: debhelper (>= 11~),
+Standards-Version: 4.3.0
+
+Package: node-foo
+Architecture: all
+Description: Foo
+
+Package: libjs-foo
+Architecture: all
+Description: Foo

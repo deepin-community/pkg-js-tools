@@ -1,0 +1,12 @@
+{
+  "name": "foo",
+  "version": "0.0.1",
+  "devDependencies": {
+    "grunt": "latest"
+  },
+  "scripts": {
+    "build": "grunt"
+  },
+  "files": ["dist"],
+  "main": "dist"
+}

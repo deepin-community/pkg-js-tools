@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+# vim: set noet ft=make
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+%:
+	dh $@ --with nodejs

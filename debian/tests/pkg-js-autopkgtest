@@ -1,0 +1,26 @@
+#!/bin/sh
+
+TESTDIR=t/autopkgtest/deb
+ORIG=t/autopkgtest/orig
+TESTS=`ls $TESTDIR`
+EXITCODE=0
+
+rm -rf "$ORIG/debian"
+for t in $TESTS; do
+	TMPCODE=0
+	echo "### test pkg-js-autopkgtest with test '$t'"
+	mkdir -p "$ORIG/debian/tests/pkg-js"
+	cp -v $TESTDIR/$t/* "$ORIG/debian/tests/pkg-js/"
+	(
+		cd $ORIG
+		../../../autopkgtest/runner 2>&1
+	) || TMPCODE=$?
+	if [ $TMPCODE != 0 ]; then
+		echo "### /!\ test $t failed" >&2
+		EXITCODE=$TMPCODE
+	fi
+	rm -rf "$ORIG/debian"
+	echo
+done
+
+exit $EXITCODE

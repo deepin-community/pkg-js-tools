@@ -1,0 +1,225 @@
+#!/usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use Debian::PkgJs::Version;
+use Debian::PkgJs::Banned;
+use Debian::PkgJs::Utils;
+use JSON;
+
+my %opt;
+
+GetOptions( \%opt, 'h|help', 'v|version', 'json', 'dev|development',
+    'prod|production', );
+
+# Usage and version
+if ( $opt{h} ) {
+    print <<EOF;
+Usage: pkgjs-ls
+
+Same as `npm ls` but read also global files
+
+Options:
+ -h, --help: print this
+ --dev, --development: includes dev dependencies
+ --prod, --production: don't include dev dependencies
+EOF
+    exit;
+}
+elsif ( $opt{v} ) {
+    print "$VERSION\n";
+    exit;
+}
+
+# nodejs paths
+my @npaths =
+  ( '/usr/share/nodejs', '/usr/lib/nodejs', glob("/usr/lib/*/nodejs") );
+
+# Prepare Semver server
+my $semver = undef;
+
+use IO::Pipe;
+my $qchannel = IO::Pipe->new;
+my $rchannel = IO::Pipe->new;
+
+my $pid = fork;
+
+unless ($pid) {
+    $qchannel->reader();
+    $rchannel->writer();
+    open STDIN,  '<&', $qchannel->fileno or die $!;
+    open STDOUT, '>&', $rchannel->fileno or die $!;
+    exec qq@node -e 'var readline=require("readline");
+var semver=require("semver");
+var rl=readline.createInterface({input:process.stdin,output:process.stdout,terminal:false});
+rl.on("line",function(line){
+  var v=line.replace(/ .*\$/,"");
+  var r=line.replace(/^.* /,"");
+  console.log(semver.satisfies(v,r)?1:0)
+});
+'@;
+    exit;
+}
+
+# Initialize and verify semver channel
+else {
+    $qchannel->writer();
+    $rchannel->reader();
+    $qchannel->autoflush(1);
+    $qchannel->print("1.1.1 ^1.0.0\n");
+    my $v = $rchannel->getline;
+    chomp $v;
+    if ( $v eq '1' ) {
+        $semver = sub {
+            my ( $v, $ref ) = @_;
+            my $res;
+            eval {
+                $qchannel->print("$v $ref\n");
+                $res = $rchannel->getline;
+                chomp $res;
+            };
+            return $res;
+        }
+    }
+    else {
+        print STDERR "No semver, did you install node-semver ?\n";
+    }
+}
+
+# MAIN: launch `npm ls` and decode
+my $cmd = join( ' ',
+    'npm', 'ls', '--json',
+    ( $opt{dev}  ? '--dev'  : '' ),
+    ( $opt{prod} ? '--prod' : '' ) );
+our $deps = `$cmd 2>/dev/null`;
+$deps =~ s/\}\s*\{/,/gs;
+eval { $deps = decode_json($deps) };
+if ($@) {
+    die "Unable to parse `npm ls` result: $@\n";
+}
+
+# Transform tree
+$deps->{dependencies} //= {};
+
+#foreach my $k ( keys %{ $deps->{dependencies} } ) {
+transform($deps);
+
+#}
+
+# And display
+if ( $opt{json} ) {
+    print JSON->new->pretty->encode($deps);
+}
+else {
+    eval {
+        my $pkg = pjson('.');
+        print "$pkg->{name}\@$pkg->{version}\n";
+    };
+    display( $deps, '' );
+}
+exit(0);
+
+sub transform {
+    my ($deps) = @_;
+
+    if ( $deps->{problems} ) {
+        foreach ( @{ $deps->{problems} } ) {
+            if ( /^missing: (.+?)\@(\d[\d\.\w]*)\S*(.*)$/
+                and $deps->{dependencies}->{$1} )
+            {
+                $deps->{dependencies}->{$1}->{missing} = 1;
+
+                #$deps->{dependencies}->{$1}->{required} = $2;
+                #$deps->{dependencies}->{$1}->{why}      = $3;
+            }
+        }
+    }
+    delete $deps->{problems};
+    foreach my $k ( keys %{ $deps->{dependencies} } ) {
+        my $v = $deps->{dependencies}->{$k};
+        $k =~ s/\@(?:\d.*|)$//;
+        my $path;
+        foreach (@npaths) {
+            $path = "$_/$k" if -d "$_/$k" or -f "$_/$k.js";
+        }
+        if ($path) {
+            $v->{global} = $path;
+            my $version = '';
+            if ( -e "$path/package.json" ) {
+                eval {
+                    $version = pjson($path)->{version};
+                };
+                $v->{version} ||= $version;
+            }
+            unless ( delete $v->{missing} ) {
+                $v->{double} = $version;
+            }
+        }
+        if ( $v->{dependencies} and not $v->{global} ) {
+            transform( $deps->{dependencies}->{$k} );
+        }
+    }
+}
+
+sub termColor {
+    my ($string) = @_;
+    $string =~ s/\033.*?m//g unless -t STDOUT;
+    return $string;
+}
+
+sub display {
+    my ( $deps, $offset ) = @_;
+    my @keys = sort keys %{ $deps->{dependencies} };
+    for ( my $i = 0 ; $i < @keys ; $i++ ) {
+        my $k = $keys[$i];
+
+        #foreach my $k ( keys %{ $deps->{dependencies} } ) {
+        my $v = $deps->{dependencies}->{$k};
+        print ''
+          . $offset
+          . (
+              ( $v->{dependencies} and !$v->{global} and !$v->{missing} )
+            ? ( $i == $#keys ? '└─┬ ' : '├─┬ ' )
+            : $i == $#keys ? '└── '
+            :                '├── '
+          )
+          . (
+              $v->{missing} ? termColor("\033[1mUNMET DEPENDENCY\033[0m ")
+            : $v->{double}  ? termColor("\033[1mDUPLICATE ")
+            : $v->{global}  ? ''
+            :                 termColor("\033[31;2;3mlocal ")
+          )
+          . $k . '@'
+          . ( $v->{double} || $v->{version} || $v->{required} )
+          . termColor("\033[0m")
+          . (
+            (
+                     !$v->{missing}
+                  and $semver
+                  and $v->{version} ne ''
+                  and ( $v->{required} || $v->{double} )
+            )
+            ? (
+                $semver->(
+                    (
+                        $v->{double}
+                        ? ( $v->{double}, $v->{version} )
+                        : ( $v->{version}, $v->{required} )
+                    )
+                  )
+                ? ''
+                : termColor(" \033[1mRequires: ")
+                  . ( $v->{required} || $v->{version} )
+                  . termColor("\033[0m")
+              )
+            : ( $v->{missing} && $v->{why} )
+            ? termColor(" \033[1m$v->{why}\033[0m")
+            : ''
+          ) . "\n";
+        if ( $v->{dependencies} and !$v->{missing} and !$v->{global} ) {
+            my $o = $offset;
+            $o .= ( $i == $#keys ? '  ' : '│ ' );
+            display( $v, $o );
+        }
+    }
+}

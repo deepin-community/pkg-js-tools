@@ -1,0 +1,8 @@
+{
+ "name":"foo",
+ "version":"0.1",
+ "scripts": {
+   "build":"npm run build:init && touch a",
+   "build:init":"echo OK && touch b"
+ }
+}

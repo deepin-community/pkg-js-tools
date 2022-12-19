@@ -1,0 +1,254 @@
+#!/usr/bin/perl
+
+use strict;
+use Dpkg::IPC;
+use Debian::PkgJs::Banned;
+use Debian::PkgJs::Version;
+use Getopt::Long;
+use JSON;
+
+my %opt;
+
+GetOptions( \%opt, 'h|help', 'v|version', 'dev|development', 'debug' );
+
+# Find name
+if ( !@ARGV and -e 'package.json' ) {
+    local $/ = undef;
+    open my $f, 'package.json';
+    eval {
+        my $res = JSON::from_json(<$f>);
+        push @ARGV, $res->{name} if $res->{name};
+    };
+    @ARGV = ('unknown') unless @ARGV;
+}
+
+# Usage and version
+if ( $opt{h} or !@ARGV ) {
+    print <<EOF;
+Usage: pkgjs-ls
+
+Search recursively dependencies of the given module name (else use
+`package.json#name`) and displays:
+ * related Debian packages (using apt-file)
+ * missing modules
+
+Options:
+ -h, --help: print this
+ --dev, --development: includes dev dependencies
+                       (for main package only, not dependencies)
+ --debug
+EOF
+    exit;
+}
+elsif ( $opt{v} ) {
+    print "$VERSION\n";
+    exit;
+}
+
+# nodejs paths
+my @npaths =
+  ( '/usr/share/nodejs', '/usr/lib/nodejs', glob("/usr/lib/*/nodejs") );
+
+# Prepare Semver server
+my $semver = undef;
+
+use IO::Pipe;
+my $qchannel = IO::Pipe->new;
+my $rchannel = IO::Pipe->new;
+
+my $pid = fork;
+
+unless ($pid) {
+    $qchannel->reader();
+    $rchannel->writer();
+    open STDIN,  '<&', $qchannel->fileno or die $!;
+    open STDOUT, '>&', $rchannel->fileno or die $!;
+    exec qq@node -e 'var readline=require("readline");
+var semver=require("semver");
+var rl=readline.createInterface({input:process.stdin,output:process.stdout,terminal:false});
+rl.on("line",function(line){
+  var v=line.replace(/ .*\$/,"");
+  var r=line.replace(/^.* /,"");
+  console.log(semver.satisfies(v,r)?1:0)
+});
+'@;
+    exit;
+}
+
+# Initialize and verify semver channel
+else {
+    $qchannel->writer();
+    $rchannel->reader();
+    $qchannel->autoflush(1);
+    $qchannel->print("1.1.1 ^1.0.0\n");
+    my $v = $rchannel->getline;
+    chomp $v;
+    if ( $v eq '1' ) {
+        $semver = sub {
+            my ( $v, $ref ) = @_;
+            my $res;
+            eval {
+                $qchannel->print("$v $ref\n");
+                $res = $rchannel->getline;
+                chomp $res;
+            };
+            return $res;
+        }
+    }
+    else {
+        print STDERR "No semver, did you install node-semver ?\n";
+    }
+}
+
+sub debug {
+    print STDERR $_[0] if $opt{debug};
+}
+
+sub getDeps {
+    my ( $mod, $offset ) = @_;
+    debug "#$offset checking $mod:\n";
+    my $out;
+    spawn(
+        exec => [
+            'npm', 'view', '--json', $mod, 'version', 'name', 'dependencies',
+            ( $opt{dev} ? ('devDependencies') : () )
+        ],
+        nocheck    => 1,
+        wait_child => 1,
+        to_string  => \$out
+    );
+    $opt{dev} = 0;
+    if ($@) {
+        print STDERR "$mod not found\n";
+        return {};
+    }
+    my $res;
+    eval { $res = JSON::from_json($out); };
+    if ($@) {
+        print STDERR "`npm view` returned bad JSON for $mod\n$@";
+        return {};
+    }
+    $res = pop @{$res} if ref $res eq 'ARRAY';
+    return () unless ref $res;
+    checkMods( $res, $offset );
+    delete $res->{name};
+    return $res;
+}
+
+my $global  = {};
+my $missing = {};
+my $known   = {};
+
+sub checkMods {
+    my ( $res, $offset ) = @_;
+    foreach my $f ( 'dependencies', 'devDependencies' ) {
+        next unless $res->{$f};
+        foreach my $mod ( sort keys %{ $res->{$f} } ) {
+            my $want = $res->{$f}->{$mod};
+            if ( $known->{$mod} ) {
+                $global->{ $known->{$mod} }->{$mod}++;
+                $res->{$f}->{$mod} = { global => $known->{$mod} };
+                debug "#$offset  => package: $known->{$mod}\n";
+                next;
+            }
+            my $path;
+            foreach (@npaths) {
+                $path = "$_/$mod" if -d "$_/$mod" or -f "$_/$mod.js";
+            }
+            if ($path) {
+                my $out;
+                spawn(
+                    exec       => [ 'dpkg', '-S', $path ],
+                    wait_child => 1,
+                    to_string  => \$out,
+                    nocheck    => 1
+                );
+                if ($@) {
+                    print STDERR "Fail to find package for $path\n";
+                    $res->{$f}->{$mod} = { global => $path };
+                }
+                else {
+                    chomp $out;
+                    $out =~ s/:.*$//s;
+                    $res->{$f}->{$mod} = { global => $out };
+                    $global->{$out}->{$mod}++;
+                    $known->{$mod} = $out;
+                    debug "#$offset  => package: $known->{$mod}\n";
+                }
+            }
+            else {
+                my $out;
+                spawn(
+                    exec       => [ 'apt-file', 'search', "/nodejs/$mod/" ],
+                    nocheck    => 1,
+                    wait_child => 1,
+                    to_string  => \$out,
+                );
+                if ( !$@ and $out =~ /^(\S+): /s ) {
+                    $res->{$f}->{$mod} = { global => $1 };
+                    $global->{$1}->{$mod}++;
+                    $known->{$mod} = $1;
+                    debug "#$offset  => package: $known->{$mod}\n";
+                }
+                else {
+                    if ( $missing->{$mod} ) {
+                        $res->{$f}->{$mod} =
+                          ref $missing->{$mod} ? $missing->{$mod} : {};
+                        $missing->{$mod}->{$want}++;
+                    }
+                    elsif ( $mod eq $ARGV[0] ) {
+                        $res->{$f}->{$mod} = { $want => 1 };
+                    }
+                    else {
+                        debug "#$offset  => missing: $mod\n";
+                        $missing->{$mod} = $res->{$f}->{$mod} =
+                          getDeps( $mod . '@' . $want, "  $offset" );
+                        $missing->{$mod}->{$want}++;
+                    }
+                }
+            }
+        }
+    }
+}
+
+sub displayMissing {
+    my ( $res, $offset ) = @_;
+    $offset //= '';
+    foreach my $f ( 'dependencies', 'devDependencies' ) {
+        next unless $res->{$f};
+        foreach my $mod ( sort keys %{ $res->{$f} } ) {
+            next if $res->{$f}->{$mod}->{global};
+            if ( ref $missing->{$mod} ) {
+                $missing->{$mod} = '';
+                print "$offset └── $mod "
+                  . "($res->{$f}->{$mod}->{version})"
+                  . ( $mod =~ $BANNED ? ' # BANNED' : '' ) . "\n";
+                displayMissing( $res->{$f}->{$mod}, "    $offset" )
+                  if $res->{$f}->{$mod}->{dependencies};
+            }
+            else {
+                print
+                  "$offset └── (^) $mod ($res->{$f}->{$mod}->{version})"
+                  . ( $mod =~ $BANNED ? ' # BANNED' : '' ) . "\n";
+            }
+        }
+    }
+}
+
+$missing->{ $ARGV[0] } = "\@$ARGV[0]";
+my $res = getDeps( $ARGV[0] );
+
+#print STDERR Dumper($res);use Data::Dumper;
+
+if (%$global) {
+    print "DEPENDENCIES:\n";
+    foreach my $mod ( sort keys %$global ) {
+        print "  $mod (" . join( ', ', sort keys %{ $global->{$mod} } ) . ")\n";
+    }
+    print "\n";
+}
+delete $missing->{ $ARGV[0] };
+if (%$missing) {
+    print "MISSING:\n$ARGV[0]\n";
+    displayMissing($res);
+}

@@ -1,0 +1,5 @@
+foo (0.1-1) unstable; urgency=medium
+
+  * Initial release
+
+ -- Foo <foo@bar.org>  Mon, 26 Aug 2013 22:55:31 +0300

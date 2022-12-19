@@ -1,0 +1,2 @@
+# Default .npmignore content taken from
+build/config.gypi

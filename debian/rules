@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+# vim: set noet ft=make
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/dpkg/pkg-info.mk
+
+BIN:=$(shell ls tools/)
+MANPAGE:=$(BIN:=.1)
+REGEXPSOURCEFILES:=$(shell ls dh_nodejs/*)
+export NPMIGNOREDEFAULT=$(shell pwd)/dh_nodejs/npmignore.default
+GENENATEDFILES=lib/Debian/Debhelper/Buildsystem/nodejs.pm \
+	lib/Debian/PkgJs/Banned.pm \
+	autopkgtest/runner
+
+%:
+	dh $@
+
+%.1:
+	PERL5LIB=lib help2man --no-discard-stderr -n $* -N --help-option=-h ./tools/$* > $*.1
+
+override_dh_auto_configure: $(GENENATEDFILES)
+	dh_auto_configure
+
+$(GENENATEDFILES): $(REGEXPSOURCEFILES)
+	./dh_nodejs/mk_regexp $(GENENATEDFILES)
+
+lib/Debian/PkgJs/Version.pm: debian/changelog
+	perl -i -pe 's/[\d\.]+/'$(DEB_VERSION)'/' lib/Debian/PkgJs/Version.pm
+
+override_dh_auto_install: lib/Debian/Debhelper/Buildsystem/nodejs.pm $(MANPAGE)
+	dh_auto_install
+
+override_dh_installman:
+	rm -f *.1p
+	dh_installman
+	# Remove duplicates
+	for f in debian/pkg-js-tools/usr/share/man/man1/*.1p; do \
+		rm -f $${f%p}; \
+	done
+
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+override_dh_auto_test:
+	dh_auto_test
+	debian/tests/pkg-js-autopkgtest
+endif

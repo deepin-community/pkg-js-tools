@@ -1,0 +1,8 @@
+dh_nodejs/npmignore.default	usr/share/pkg-js-tools/
+lintian/checks/*	usr/share/lintian/checks/
+lintian/profiles/*	usr/share/lintian/profiles/
+lintian/tags/*          usr/share/lintian/tags/pkg-js/
+pkg-js-salsa.conf	usr/share/pkg-js-tools/
+usr/bin/
+usr/share/perl5/
+usr/share/man/man1/*.1p

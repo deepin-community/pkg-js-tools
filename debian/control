@@ -1,0 +1,69 @@
+Source: pkg-js-tools
+Maintainer: Debian Javascript Maintainers <pkg-javascript-devel@lists.alioth.debian.org>
+Uploaders: Yadd <yadd@debian.org>
+Section: devel
+Testsuite: autopkgtest-pkg-perl
+Priority: optional
+Build-Depends: debhelper-compat (= 13)
+Build-Depends-Indep: devscripts
+ , git
+ , help2man
+ , libdebian-copyright-perl
+ , libipc-run-perl
+ , libjson-perl
+ , libregexp-assemble-perl
+ , libtest-output-perl
+ , nodejs:any | nodejs (<<12.22.5~dfsg-4~) <!nocheck>
+ , perl
+Standards-Version: 4.6.0
+Vcs-Browser: https://salsa.debian.org/js-team/pkg-js-tools
+Vcs-Git: https://salsa.debian.org/js-team/pkg-js-tools.git
+Homepage: https://salsa.debian.org/js-team/pkg-js-tools
+Rules-Requires-Root: no
+
+Package: pkg-js-tools
+Architecture: all
+Depends: ${misc:Depends}
+ , ${perl:Depends}
+ , debhelper
+ , libdebian-copyright-perl
+ , libipc-run-perl
+ , libjson-perl
+ , nodejs:any | nodejs (<<12.22.5~dfsg-4~)
+Recommends: devscripts
+ , libdpkg-perl
+Suggests: autodep8
+ , autopkgtest
+ , git-buildpackage
+ , libconfig-inifiles-perl
+ , libconfig-model-dpkg-perl
+ , libconfig-model-perl
+ , lintian (>= 2.58.0~)
+ , node-semver
+Provides: dh-sequence-nodejs (= ${binary:Version})
+Multi-Arch: foreign
+Breaks: nodejs-dev (<<10.15.0~dfsg-10)
+Description: collection of tools to aid packaging Node modules in Debian
+ The Debian Javascript Group
+ works on packaging JavaScript libraries for Debian.
+ This collection contains the tools
+ which help the group with day-to-day work.
+ .
+ It provides github-debian-upstream, dh-make-node,
+ a salsa configuration file and files to add "--with nodejs" to dh.
+
+Package: pkg-js-autopkgtest
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+ , libjson-perl
+ , pkg-js-tools
+Description: collection of autopkgtest scripts for Nodejs packages
+ This package contains test runners
+ to be used with the autopkgtest infrastructure for Nodejs packages.
+ .
+ Packages using the tests with autopkgtests in this package
+ can simply set "Testsuite: autopkgtest-pkg-nodejs" in debian/control.
+ .
+ Cf. /usr/share/doc/pkg-js-autopkgtest/README.md
+ for information on the tests and how to tweak them.

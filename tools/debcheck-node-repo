@@ -1,0 +1,151 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Debian::PkgJs::Lib;
+use Debian::PkgJs::Npm;
+use Debian::PkgJs::Version;
+use Dpkg::Version;
+use threads;
+
+# package.json cache
+
+my $res = 0;
+
+sub usage {
+    print <<EOF;
+Usage: debcheck-node-repo
+
+debcheck-node-repo check consistence between debian/watch and npm registry.
+
+Launch it in a debian/node source repository.
+
+Copyright (C) 2019 Xavier Guimard <yadd\@debian.org>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+EOF
+}
+
+sub check {
+    my ($dir) = @_;
+    my $pname = pjson($dir);
+    unless ($pname) {
+        print STDERR "Not a node repo\n";
+        exit 0;
+    }
+    $pname = $pname->{name};
+    my $print_git_watch = 0;
+    my $print_reg_watch = 0;
+    my @thr             = (
+        threads->create( sub { npmrepo($pname) } ),
+        threads->create( sub { uscanResult() } ),
+    );
+    my ( $npm_version, $npm_url ) = $thr[0]->join();
+    unless ($npm_url) {
+        print STDERR "Package $pname seems not published in npm registry.\n";
+        $res++;
+        $thr[1]->join();
+        return;
+    }
+    my $npm_orig = url_part($npm_url);
+    push @thr, threads->create( sub { git_last_version($npm_orig) } );
+    my ( $uscan_version, $uscan_url ) = $thr[1]->join();
+    unless ($uscan_version) {
+        print STDERR "Uscan didn't find any version.\n";
+        $res++;
+        $thr[2]->join();
+        return;
+    }
+
+    my $npm_cmp   = Dpkg::Version->new( "$npm_version-0",   check => 0 );
+    my $uscan_cmp = Dpkg::Version->new( "$uscan_version-0", check => 0 );
+
+    if ( $npm_cmp ne $uscan_cmp ) {
+        $res++;
+        print STDERR <<EOF;
+Versions found by uscan and npmregistry mismatch:
+ * uscan: $uscan_version => $uscan_url
+ * npm  : $npm_version => $npm_url
+
+EOF
+    }
+
+    my $uscan_orig = url_part($uscan_url);
+    if ( $npm_orig ne $uscan_orig
+        and not $uscan_orig =~ /(?:fakeupstream\.cgi|registry\.npm)/ )
+    {    # TODO: Check tags
+        $res++;
+        print STDERR <<EOF;
+Repositories mismatch:
+ * uscan: $uscan_orig
+ * npm  : $npm_orig
+
+EOF
+    }
+
+    my $git_last_version = $thr[2]->join() // 0;
+    my $git_cmp = Dpkg::Version->new( "$git_last_version-0", check => 0 );
+
+    if (    $git_last_version
+        and ( $git_cmp <=> $npm_cmp ) == 0
+        and $uscan_orig =~ /(?:fakeupstream\.cgi|registry\.npm)/ )
+    {
+        $res++;
+        $print_git_watch++;
+        print STDERR <<EOF;
+Git tag and npm versions are equal ($npm_version) while debian watch points to
+$uscan_orig, you should change your debian/watch to point
+to $npm_orig
+EOF
+    }
+    elsif ( $uscan_cmp > $npm_cmp ) {
+        $res++;
+        $print_reg_watch++;
+        print STDERR
+"Uscan version ($uscan_version) is more recent than npm one ($npm_version).\n"
+          . 'Please investigate\n\n';
+    }
+    elsif ( $npm_cmp > $uscan_cmp ) {
+        $res++;
+        $print_reg_watch++;
+        print STDERR
+"npm version ($npm_version) is more recent than uscan one ($uscan_version)\n"
+          . "Consider switching to registry.npm.org\n\n";
+    }
+    elsif ( !$res and $uscan_orig =~ /fakeupstream\.cgi/ ) {
+        $res++;
+        $print_reg_watch++;
+        print STDERR 'Repo uses old fakeupstream.cgi. '
+          . qq'Please replace by uscan "plaintext" method\n\n';
+    }
+
+    if ($print_git_watch) {
+        if ( my $watch = git_watch($npm_orig) ) {
+            print STDERR
+              "Here is a template that could be used:\n\nversion=4\n$watch\n";
+        }
+    }
+    elsif ($print_reg_watch) {
+        my $watch = registry_watch($pname);
+        print STDERR <<EOF;
+Here is a template that could be used:
+
+version=4
+$watch
+EOF
+    }
+}
+
+if (@ARGV) {
+    if ( $ARGV[0] eq '--version' ) {
+        print $VERSION;
+    }
+    else {
+        usage();
+    }
+    exit;
+}
+
+check('.');
+
+exit $res;

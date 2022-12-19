@@ -1,0 +1,17 @@
+*.1
+t/*/foo
+t/*/debian/foo/
+t/*/debian/node-foo/
+t/*/node_modules/
+t/*/*/node_modules/
+t/*/debian/.debhelper/
+t/*/debian/*.debhelper.log
+t/*/debian/tmp/
+t/*/dist/
+t/*/order
+t/simple/a
+t/simple/b
+t/submodules/comp-*/comp-*
+t/submodules/comp-one/a
+t/*/debian/foo.substvars
+t/*/debian/files

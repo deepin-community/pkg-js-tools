@@ -1,0 +1,10 @@
+Source: foo
+Maintainer: Foo <foo@bar.com>
+Section: devel
+Priority: optional
+Build-Depends: debhelper-compat (= 12),
+Standards-Version: 4.4.0
+
+Package: foo
+Architecture: all
+Description: Foo

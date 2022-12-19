@@ -1,0 +1,16 @@
+\..*
+docs?
+examples?
+tests?
+node_modules
+bench
+(?:.*/)?.deps
+(?:.*/)?fixtures?
+(?:.*/)?__[^/]*__
+(?:.*/)?\.git
+(?:.*/)?\.svn
+(?:.*/)?\.hg
+(?:.*/)?CVS
+(?:.*/)?.DS_Store
+(?:.*/)?\._.*
+archived-packages

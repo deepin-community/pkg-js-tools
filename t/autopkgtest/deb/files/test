@@ -1,0 +1,7 @@
+echo "  Testing files installed automatically"
+for f in lib/index.js; do
+	[ -e $f ]
+done
+for f in Gruntfile.js Makefile test/index.js lib/__tests__/t; do
+	[ ! -e $f ]
+done

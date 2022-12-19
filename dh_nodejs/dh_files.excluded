@@ -1,0 +1,35 @@
+# FILES EXCLUDED IN ANY DIR EXCEPT IF EXPLICITELY SET BY DM
+# Makefiles
+makefile
+binding.Makefile
+.*\.mk
+jakefile
+
+# eslint hidden files
+\.eslint.*
+
+# Source files
+.*\.coffee
+.*\.c
+.*\.cc
+.*\.ccp
+.*\.c\+\+
+.*\.def
+.*\.h
+
+# Git/npm files
+\.npmignore
+\.gitignore
+\.lock-wscript
+\.wafpickle-.*
+npm-debug\.log
+\.npmrc
+\._.*
+package-lock\.json
+yarn\.lock
+.*\.orig
+
+# Common readme
+readme\.md
+readme\.txt
+readme

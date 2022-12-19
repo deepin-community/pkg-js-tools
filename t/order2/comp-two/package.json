@@ -1,0 +1,5 @@
+{
+ "name":"comp_two",
+ "version":"0.1",
+ "files": [ "index.js", "package.json" ]
+}

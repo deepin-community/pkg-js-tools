@@ -1,0 +1,226 @@
+#!/bin/bash
+
+set -e
+
+function dolink() {
+	DIR=$1
+	echo "# Searching files to link in $DIR"
+	for f in `ls $DIR/`; do
+		if [ -d $f ]; then
+			echo "# subdir $f already exists:"
+			( cd $f; dolink $DIR/$f )
+		else
+			ln -sv $DIR/$f || echo "### skipping $i"
+		fi
+	done
+}
+
+MAKEFILES='^(?:(?:(?:(?:rollup[\.\-].*|ava\.)config|karma\.conf|.mocharc)\.j|g(?:ulpfile\.(?:babel\.j|(?:t|j))|runt(?:file)?\.j))s|j(?:est\.config\.js|sl\.node\.conf)|(?:tsconfig|lerna)\.json|babel\.config\.js(?:on)?|(?:[cm]ake|Docker)file|\.babelrc(?:.js)?)$'
+
+pack=package.json
+if [ -e debian/nodejs/main ]; then
+	pack=`egrep -v '^(.*#.*|)$' debian/nodejs/main`
+	pack="$pack/package.json"
+	echo "# Found debian/nodejs/main, package.json is $pack"
+fi
+if [ ! -e $pack ]; then
+	pack=$(dpkg -L `grep ^Package: debian/control|head -n1|sed -e 's/.*: *//'`|grep -v node_modules|grep package.json|head -n1)
+fi
+if [ ! -e $pack ]; then
+	echo "### Unable to find package.json, aborting"
+	exit 77
+fi
+
+echo "# Using $pack"
+
+PKG=`perl -MJSON -000 -ne '$a.=$_;END{print JSON::decode_json($a)->{name}}' $pack`
+
+if [ -e debian/tests/pkg-js/require-name ]; then
+	REQUIRE_PKG=`cat debian/tests/pkg-js/require-name| head -1| sed 's/^ *//g'`
+	if [ "$REQUIRE_PKG" = "" ]; then
+		echo "# debian/tests/pkg-js/require-name exists but contains no valid name"
+		exit 1
+	fi
+	echo "# debian/tests/pkg-js/require-name, module name will be: $REQUIRE_PKG"
+else
+	REQUIRE_PKG=$PKG
+fi
+
+echo "# Node module name is $REQUIRE_PKG"
+LOCAL="0"
+
+if [ -e debian/tests/pkg-js/SKIP ]; then
+	SKIP_TEST=`cat debian/tests/pkg-js/SKIP| head -1| sed 's/^ *//g'`
+	echo "# debian/tests/pkg-js/SKIP found, content: $SKIP_TEST"
+fi
+
+if test "$1" = "src"; then
+	shift 1
+	LOCAL=1
+fi
+
+COMMAND=$@
+EVALCODE=0
+function evalNode() {
+	if "$@"; then
+		EVALCODE=0
+	else
+		EVALCODE=1
+	fi
+}
+
+if test "$COMMAND" = "require"; then
+	echo "# Test: require"
+	if test "$SKIP_TEST" != "require"; then
+		cd /
+		if test "$LOCAL" = "0"; then
+			evalNode node --no-deprecation -e "require('$REQUIRE_PKG')"
+		else
+			evalNode node --no-deprecation -e "require('.')"
+		fi
+		if [ "$EVALCODE" != "0" ]; then
+			TYPE=`pkgjs-utils pjson . type`
+			if [ "$TYPE" == "module" ]; then
+				echo "/!\ Package is a ES module"
+			fi
+		fi
+	else
+		echo '# Require Tests will NOT be run ...'
+		exit 77
+	fi
+elif test "$SKIP_TEST" != "test"; then
+	if test "$PKG" = ""; then
+		PKG=$REQUIRE_PKG
+	fi
+	if test "$PKG" = ""; then
+		echo "No Node package name found, try to set it in debian/tests/pkg-js/require-name"
+		exit 1
+	fi
+	#MAKEFILES=`ls|perl -ne "chomp;print qq{\$_ } if /$MAKEFILES/i" || true`
+	MAKEFILES=`ls -a|perl -ne "print if /$MAKEFILES/i"|xargs echo || true`
+	echo "# Build files found: $MAKEFILES"
+	TESTFILES=`ls -d test* 2>/dev/null || true`
+	echo "# Test files found: $TESTFILES"
+	TESTFILES="$TESTFILES $MAKEFILES"
+	if [ -e debian/tests/pkg-js/files ]; then
+		echo "# Found debian/tests/pkg-js/files, let's use it"
+		TESTFILES=`cat debian/tests/pkg-js/files`
+	fi
+	echo "# Files/dir to be installed from source: $TESTFILES"
+
+	TEST=debian/tests/pkg-js/test
+	if [ ! -e $TEST ]; then
+		echo "### Missing debian/tests/pkg-js/test file, skipping"
+		exit 77
+	fi
+	if test "$LOCAL" = "0"; then
+		TEMP=${AUTOPKGTEST_TMP:-${TMPDIR:-/tmp}}
+		HOME=$TEMP
+		export HOME
+		TDIR=$(mktemp -d $TEMP/smokeXXXXXX)
+		if test "$TESTFILES" != " "; then
+			if ls -d $TESTFILES >/dev/null; then
+				echo "# Copy test files"
+				tar cf - $TESTFILES | tar xf - -C $TDIR
+			fi
+		else
+			echo "# No test files to install"
+		fi
+		if [ -e debian/tests/pkg-js ]; then
+			echo "# Copy debian/tests/pkg-js content"
+			mkdir -p $TDIR/debian/tests/
+			cp -av debian/tests/pkg-js $TDIR/debian/tests/
+		fi
+		if [ -d debian/tests/test_modules ]; then
+			echo "Found debian/tests/test_modules"
+			if [ ! -d $TDIR/debian/tests/test_modules ]; then
+				echo "# let's copy it"
+				mkdir -p debian/tests
+				cp -a debian/tests/test_modules $TDIR/debian/tests/
+			fi
+			if [ ! -d $TDIR/node_modules ]; then
+				mkdir $TDIR/node_modules
+			fi
+			if [ -w $TDIR/node_modules ]; then
+				(cd $TDIR && pkgjs-utils link_test_modules)
+			else
+				echo "export NODE_PATH=debian/tests/test_modules:node_modules"
+				export NODE_PATH=debian/tests/test_modules:node_modules
+			fi
+		fi
+		if [ -d debian/build_modules ]; then
+			echo "Found debian/build_modules"
+			if [ ! -d $TDIR/debian/build_modules ]; then
+				echo "# let's copy it"
+				mkdir -p $TDIR/debian
+				cp -a debian/build_modules $TDIR/debian/build_modules/
+			fi
+			if [ ! -d $TDIR/node_modules ]; then
+				mkdir $TDIR/node_modules
+			fi
+			if [ -w $TDIR/node_modules ]; then
+				(cd $TDIR && pkgjs-utils link_build_modules)
+			fi
+		fi
+		if [ -e debian/nodejs/extlinks ]; then
+			echo "Found debian/nodejs/extlinks"
+			if [ ! -d $TDIR/node_modules ]; then
+				mkdir $TDIR/node_modules
+			fi
+			if [ -w $TDIR/node_modules ]; then
+				for mod in `cat debian/nodejs/extlinks|perl -pe 's/\s+.*$/ /'|grep -v '^#'`; do
+					if nodepath $mod >/dev/null 2>&1; then
+						( cd $TDIR; pkgjs-utils ln $mod )
+					else
+						echo "$mod not found, skipping link"
+					fi
+				done
+			fi
+		fi
+		if [ -e debian/nodejs/extcopies ]; then
+			echo "Found debian/nodejs/extcopies"
+			if [ ! -d $TDIR/node_modules ]; then
+				mkdir $TDIR/node_modules
+			fi
+			if [ -w $TDIR/node_modules ]; then
+				for mod in `cat debian/nodejs/extcopies|perl -pe 's/\s+.*$/ /'|grep -v '^#'`; do
+					if nodepath $mod; then
+						dir=`dirname $mod`
+						mkdir -p "$TDIR/node_modules/$dir"
+						echo cp -rL `nodepath "$mod"` "$TDIR/node_modules/$dir"
+						cp -rL `nodepath "$mod"` "$TDIR/node_modules/$dir" || echo "Failed to copy $mod"
+					else
+						echo "$mod not found, skipping link"
+					fi
+				done
+			fi
+		fi
+		for mod in `pkgjs-utils modules_list`; do
+			if nodepath $mod >/dev/null 2>&1; then
+				( cd $TDIR; pkgjs-utils ln $mod || true )
+			fi
+		done
+		cd $TDIR
+		for NPATH in /usr/lib/nodejs/$PKG /usr/lib/*/nodejs/$PKG /usr/share/nodejs/$PKG; do
+			echo "# Searching module in $NPATH"
+			if test -e $NPATH; then
+				echo "# Found $NPATH"
+				dolink $NPATH
+			fi
+		done
+	fi
+	if test "$COMMAND" = ""; then
+		echo "# Launch $TEST with sh -ex"
+		sh -ex $TEST
+	else
+		echo "# Launch command: $COMMAND"
+		$COMMAND
+	fi
+else
+	echo '# No tests will be run ...'
+	exit 77
+fi
+if test "$TDIR" != ""; then
+	echo "# Cleaning tmp dir"
+	rm -rf $TDIR
+fi

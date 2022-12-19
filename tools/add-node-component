@@ -1,0 +1,501 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Debian::PkgJs::Lib;
+use Debian::PkgJs::Npm;
+use Debian::PkgJs::Banned;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+use Dpkg::IPC;
+use Getopt::Long;
+use JSON;
+use threads;
+
+BEGIN {
+    eval '
+use Devscripts::Uscan::Config;
+use Devscripts::Uscan::FindFiles;
+use Devscripts::Uscan::Output;
+use Devscripts::Uscan::WatchFile;
+';
+    if ($@) {
+        print STDERR "Install devscripts to use $0\n";
+        exit 1;
+    }
+}
+
+my ( $res, @npmthr, @gitthr, $exit, $watchLines, %opt );
+
+# I - GET COMMAND OPTIONS
+if ( $ARGV[0] and $ARGV[0] eq '--version' ) {
+    print "$VERSION\n";
+    exit;
+}
+$opt{'uscan-option'} = [];
+GetOptions(
+    \%opt, 'h|help',
+
+    # del-node-component ==
+    'r|remove-component',
+
+    # list-node-components ==
+    'l|list-components',
+
+    # list-modules ==
+    'm|list-modules',
+
+    # Type
+    'g|group', 'ignore', 'c|checksum',
+
+    # Search
+    'uscan-option=s', 'forcenpm|force-npm-reg', 'forcegithub|force-github-tags',
+
+    # Install
+    'd|download', 'i|install', 'f|remove-tag', 'u|cme-update',
+
+    # Other options
+    'no-ctype',
+
+    # Component tree
+    'cmptree|cmp-tree',
+);
+$opt{'uscan-option'} = [ '--download-current-version', '-dd' ]
+  unless @{ $opt{'uscan-option'} };
+
+# Aliases
+$opt{r} = 1 if $0 =~ /del-node-component$/;
+$opt{l} = 1 if $0 =~ /list-node-components$/;
+$opt{m} = 1 if $0 =~ /list-node-modules$/;
+
+# II - USAGE
+if ( $opt{h} or not( @ARGV or $opt{cmptree} or $opt{l} or $opt{m} ) ) {
+    print <<EOF;
+Usage: add-node-component <node-modules-to-add-as-component>
+
+node-modules-to-add-as-component: list of component to add. Version can be
+specified (example: bson\@1.0.0)
+
+Options:
+ -h, --help: print this
+ -c, --checksum: install new component with "checksum" at the end of debian/watch line (default, see uscan(1) for more)
+ -g, --group: install new component with "group" at the end of debian/watch line
+ --ignore install new component with "ignore" at the end of debian/watch line
+ --no-ctype: don't add "ctype=nodejs" in debian/watch (see uscan(1) for more, enabled automatically for now unless --checksum)
+ -d, --download: download new sources
+ -i, --install: import downloaded sources (implies -d)
+ -f, --remove-tag: remove origin tag if exists locally (before import)
+ -u, --cme-update: launch a "cme update dpkg-compyright" after import to update debian/copyright
+ -r, --remove-component: remove component instead of adding it (default when del-node-component is used)
+ -l, --list-components: print components list
+ -m, --list-modules: print modules list
+ --force-npm-reg: force the use of npm registry
+ --force-github-tags: force the use of GitHub tags
+ --uscan-option: option(s) to pass to uscan (multi-valued). Default: "-dd --download-version"
+ --cmp-tree: print a digraph of relation between component (give it to graph-easy)
+
+Copyright (C) 2019 Xavier Guimard <yadd\@debian.org>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+EOF
+    exit( $opt{h} ? 0 : 1 );
+}
+
+my $target =
+  $opt{c} ? 'checksum' : $opt{g} ? 'group' : $opt{ignore} ? 'ignore' : 'ignore';
+
+# Import implies download
+$opt{d} ||= $opt{i};
+
+my ( %wanted_versions, %after_v );
+
+# III - MAIN
+
+# 3.1 - Get upstream repositories for each new component
+unless ( $opt{r} or $opt{l} or $opt{m} or $opt{cmptree} ) {
+    foreach my $cmp (@ARGV) {
+        if ( $cmp =~ s/\@(\d[\d\.]*.*)$// ) {
+            my $v = $1;
+            if ( $v =~ /^0/ ) {
+                $v =~ s/^(0\.\d+).*$/$1/;
+            }
+            else {
+                $v =~ s/^(\d+).*$/$1/;
+            }
+            $wanted_versions{$cmp} = $v;
+        }
+        push @npmthr, threads->create( sub { npmrepo($cmp) } );
+    }
+}
+
+# 3.2 - Parse components in debian/watch
+my @comp = @ARGV;
+
+($watchLines) = getWatchLines();
+$_->parse foreach (@$watchLines);
+my @cmpnames = map { $_->component ? $_->component : () } @$watchLines;
+if ( -e 'debian/nodejs/additional_components' ) {
+    open my $f, 'debian/nodejs/additional_components' or die $!;
+    while (<$f>) {
+        next if /^\s*(?:#.*)?$/;
+        chomp;
+        push @cmpnames, glob $_;
+    }
+}
+
+my @components_changed;
+
+# 4 - Case --cmp-tree : print a digraph
+if ( $opt{cmptree} ) {
+    require Debian::PkgJs::Npm;
+    my @modNames =
+      map { ( -d $_ and defined pjson($_)->{name} ) ? pjson($_)->{name} : () }
+      ( '.', @cmpnames );
+
+    sub deplist {
+        my ($cmp) = @_;
+        return () unless -d $cmp;
+        my $name = pjson($cmp)->{name};
+        my @deps = keys %{ pjson($cmp)->{dependencies} // {} };
+        return map {
+            my $s = $_;
+            ( map { qq'  "$name" -> "$_";\n' } grep { $_ eq $s } @deps )
+        } @modNames;
+    }
+    my @res;
+    push @res, deplist($_) foreach ( '.', @cmpnames );
+    print qq'digraph "$modNames[0]" {\n  rankdir=LR;\n', @res, "}\n";
+}
+
+# 5 - Remove component (-r or "del-node-domponent")
+elsif ( $opt{r} ) {
+    my @tmp = @ARGV;    # Avoid modif by map
+    for ( my $i = 0 ; $i < @cmpnames ; $i++ ) {
+        push @components_changed, grep { isEqual( $cmpnames[$i], $_ ) }
+          map { s/[^a-zA-Z0-9]//g; $_ } (@tmp);
+    }
+    my ( $f, $new_watch, $removed_from_watch );
+    {
+        local $/ = '';
+        open $f, 'debian/watch';
+        while ( my $wline = <$f> ) {
+            if ( $wline =~ /component=\w.*component=\w/s ) {
+                print STDERR "Unable to parse this:\n$wline\nAborting...\n";
+                exit 1;
+            }
+            if ( grep { $wline =~ /component\s*=\s*$_\b/s }
+                @components_changed )
+            {
+                $removed_from_watch .= $wline;
+            }
+            else {
+                $new_watch .= $wline;
+            }
+        }
+        close $f;
+    }
+    unless ($removed_from_watch) {
+        print STDERR "Nothing to remove, aborting\n";
+        exit 1;
+    }
+    open $f, '>', 'debian/watch';
+    print $f $new_watch;
+    close $f;
+}
+
+# 6 - list component names
+elsif ( $opt{l} ) {
+    print "$_\n" foreach (@cmpnames);
+}
+
+# 7 - list module names
+elsif ( $opt{m} ) {
+    print pjson($_)->{name} . "\n" foreach (@cmpnames);
+}
+
+# 8 - General case: add component(s)
+else {
+    my $failed = 0;
+
+    # 8.1 - Get real list of new components
+    foreach my $cmp (@comp) {
+
+        if ( $cmp =~ $BANNED ) {
+            print STDERR
+"$cmp is banned, see https://salsa.debian.org/js-team/pkg-js-tools/-/blob/master/doc/tools/BANNED.md\n";
+            push @gitthr, threads->create( sub { -1 } );
+            next;
+        }
+
+        # Get upstream repository results
+        my $thr = shift @npmthr;
+        my ( $latest, $tmp, $vs ) = $thr->join();
+        if ( $failed or not defined $latest ) {
+            $failed++;
+            push @gitthr, threads->create( sub { -1 } );
+            next;
+        }
+        if ( $wanted_versions{$cmp} and @$vs ) {
+          F: for ( my $i = $#$vs ; $i >= 0 ; $i-- ) {
+                if (    $vs->[ $i + 1 ]
+                    and $vs->[$i] =~ /^v?\Q$wanted_versions{$cmp}\E/ )
+                {
+                    $after_v{$cmp} = $vs->[ $i + 1 ];
+                    last F;
+                }
+            }
+        }
+        my $cmpname = normalize_name_strict($cmp);
+
+        # Skip already installed components
+        if ( grep { isEqual( $cmpname, $_ ) } @cmpnames ) {
+            print STDERR "Component $cmpname already exists, skipping\n";
+            $exit++;
+            push @gitthr, threads->create( sub { -1 } );
+            next;
+        }
+
+        # Store new component repositories and get last available version
+        my $repo;
+        if ($tmp) {
+            $repo = eval { url_part($tmp) };
+            if ($@) {
+                print STDERR "Unable to add $cmp: unable to parse $tmp\n";
+                $exit++;
+                push @gitthr, threads->create( sub { -1 } );
+            }
+            $res->{$cmp}->{npmrepo} = $repo;
+        }
+        $res->{$cmp}->{npmlatest} = $latest;
+        push @gitthr, threads->create( sub { git_last_version($repo) } );
+    }
+
+    # 8.2 - Update debian files for new components
+    foreach my $cmp (@comp) {
+        my $thr = shift @gitthr;
+        my ($gitlatest) = $thr->join();
+        next if defined $gitlatest and $gitlatest eq -1;
+        next if $failed;
+        my $check;
+        my $cmpname = normalize_name_strict($cmp);
+
+        # Replace GitHub tags by npm registry if needed
+        unless ($gitlatest) {
+            print STDERR
+              "Unable to find git tag for $cmp, falling back to npm registry\n";
+            $check = 1;
+        }
+        else {
+            $check = (
+                Dpkg::Version->new( "$gitlatest-0", check => 0 )
+                  <=> Dpkg::Version->new(
+                    "$res->{$cmp}->{npmlatest}-0", check => 0
+                  )
+            );
+        }
+        my $cmp_watch = "\n"
+          . (
+            ( not $opt{forcegithub} and ( $check or $opt{forcenpm} ) )
+            ? registry_watch(
+                $cmp,    $cmpname,
+                $target, $wanted_versions{$cmp},
+                $opt{'no-ctype'}
+              )
+            : git_watch(
+                $res->{$cmp}->{npmrepo}, $cmpname,
+                $target,                 $wanted_versions{$cmp},
+                $after_v{$cmp},          $opt{'no-ctype'},
+            )
+          );
+        my $f;
+        open $f, '>>', 'debian/watch' or die $!;
+        print $f $cmp_watch;
+        close $f;
+
+        # Update debian/copyright source field
+        $cmp_watch =~ /.*\n *(https?:\S+)/s;
+        if ( my $source = $1 ) {
+            eval {
+                require Debian::Copyright;
+                my $c = Debian::Copyright->new();
+                $c->read('debian/copyright');
+                my $cs = $c->{header}->get('Source');
+                unless ( $cs =~ /\Q$source\E/s ) {
+                    $c->{header}->set( 'Source', "$cs\n $source" );
+                    $c->write('debian/copyright');
+                }
+            };
+            print STDERR "debian/copyright unmodified: $@\n" if $@;
+        }
+        push @components_changed, $cmpname;
+    }
+    exit 1 if $failed;
+}
+exit if $exit;
+
+# 9 - Update debian/gbp.conf if needed
+if (@components_changed) {
+    eval { require Config::IniFiles };
+    if ($@) {
+        print STDERR
+          "Missing libconfig-inifiles-perl, skipping gbp.conf update";
+        exit 1;
+    }
+
+    if ( $opt{g}
+        and not( $watchLines->[0]->type and $watchLines->[0]->type eq 'group' )
+      )
+    {
+        print STDERR
+qq'Main debian/watch seems not tagged as "group", you should verify this\n';
+        $exit++;
+    }
+    unless ( -e 'debian/gbp.conf' ) {
+        my $f;
+        open $f, '>', 'debian/gbp.conf' or die $!;
+        print $f <<EOF;
+[DEFAULT]
+pristine-tar = True
+
+[import-orig]
+filter = [ '.gitignore', '.travis.yml', '.git*' ]
+EOF
+    }
+    my $cfg = Config::IniFiles->new( -file => 'debian/gbp.conf' );
+    $cfg->AddSection('DEFAULT');
+    my $val = $cfg->val( 'DEFAULT', 'component' ) || '';
+    my @cmp = ( $val =~ /([\w\-\.]+)/g );
+    $cfg->delval( 'DEFAULT', 'component' );
+    if ( $opt{r} ) {
+        foreach my $r (@components_changed) {
+            @cmp = grep { $r ne $_ } @cmp;
+        }
+    }
+    else {
+        @cmp = ( @cmp, @components_changed );
+    }
+    $cfg->newval( 'DEFAULT', 'component',
+        '[' . join( ', ', map { "'$_'" } (@cmp) ) . ']' );
+    $cfg->WriteConfig('debian/gbp.conf');
+    print STDERR 'Components '
+      . ( $opt{r} ? 'removed' : 'added' ) . ': '
+      . join( ', ', @components_changed ) . "\n";
+
+    if ( $opt{d} ) {
+
+        my ( $wl, $watchFile ) = getWatchLines();
+
+        # Workaround uscan bug
+        'q' =~ /(a)?/;
+        if ( $watchFile->process_lines ) {
+            $exit++;
+        }
+        elsif ( $opt{i} ) {
+            my $new_version = $dehs_tags->{'debian-uversion'};
+            my $mangle_v    = $new_version;
+            $mangle_v =~ s/~/_/g;
+            my ( $out, $err );
+            spawn(
+                exec       => [ 'git', 'tag' ],
+                to_string  => \$out,
+                wait_child => 1,
+                nocheck    => 1,
+            );
+            if ( $out =~ m#\b\Qupstream/$mangle_v\E\b# ) {
+                spawn(
+                    exec       => [ 'git', 'tag', '-d', "upstream/$mangle_v" ],
+                    wait_child => 1,
+                    nocheck    => 1,
+                );
+                if ( $opt{f} ) {
+                    spawn(
+                        exec => [
+                            'git',    'push',
+                            'origin', '-d',
+                            "upstream/$mangle_v"
+                        ],
+                        wait_child => 1,
+                        nocheck    => 1,
+                    );
+                }
+            }
+            my $filename = $wl->[0]->destfile;
+            unless ( $filename =~ m#^(.*/)(.*)_(?:\d.*?)\.orig\.(.*)$# ) {
+                die "$0 is unable to parse $filename, please report this bug";
+            }
+            my ( $path, $name, $ext ) = ( $1, $2, $3 );
+            $filename = "$path${name}_$new_version.orig.$ext";
+            unless ( -e $filename ) {
+                die
+qq'Unable to import "$path$name-$new_version.orig.$ext": file does not exist';
+            }
+            spawn(
+                exec => [ 'git', 'add', 'debian/gbp.conf', 'debian/watch' ],
+                wait_child => 1
+            );
+            spawn(
+                exec => [
+                    'git',
+                    'commit',
+                    '-m',
+                    'Embed components: ' . join( ', ', @components_changed ),
+                    'debian/watch',
+                    'debian/gbp.conf',
+                    'debian/copyright',
+                ],
+                wait_child => 1
+            );
+            spawn(
+                exec            => [ 'git', 'stash' ],
+                wait_child      => 1,
+                nocheck         => 1,
+                to_string       => \$out,
+                error_to_string => \$err,
+            );
+            my $nospawn = $?;
+            print STDERR "# $?\nO: $out\nE: $err\n";
+            system 'gbp', 'import-orig', '--pristine-tar', $filename;
+            unless ($nospawn) {
+                spawn(
+                    exec            => [ 'git', 'stash', 'apply' ],
+                    wait_child      => 1,
+                    nocheck         => 1,
+                    to_string       => \$out,
+                    error_to_string => \$err,
+                );
+            }
+            if ( $opt{u} ) {
+                exec 'cme', 'update', 'dpkg-copyright';
+            }
+        }
+    }
+}
+
+exit $exit if $exit;
+
+sub getWatchLines {
+    local @ARGV = @{ $opt{'uscan-option'} };
+    my $config = Devscripts::Uscan::Config->new->parse;
+    my @wf     = find_watch_files($config);
+    my ( $pkg_dir, $package, $version, $watchfile ) = @{ $wf[0] };
+    chdir $pkg_dir;
+    my $watchFile = Devscripts::Uscan::WatchFile->new(
+        {
+            config      => $config,
+            package     => $package,
+            pkg_dir     => $pkg_dir,
+            pkg_version => $version,
+            watchfile   => $watchfile,
+        }
+    );
+    die "Uscan initialization failed" if $watchFile->status;
+    my $watchLines = $watchFile->watchlines;
+    return ( $watchLines, $watchFile );
+}
+
+sub isEqual {
+    my ( $a, $b ) = @_;
+    $a =~ s/[^a-zA-Z0-9\-]//g;
+    $b =~ s/[^a-zA-Z0-9\-]//g;
+    return ( $a eq $b );
+}
