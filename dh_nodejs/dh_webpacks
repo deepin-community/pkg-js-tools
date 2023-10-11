@@ -1,0 +1,4 @@
+node-rollup-plugin-node-resolve
+webpack
+browserify
+browserify-lite

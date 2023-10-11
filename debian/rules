@@ -7,13 +7,17 @@
 
 include /usr/share/dpkg/pkg-info.mk
 
-BIN:=$(shell ls tools/)
-MANPAGE:=$(BIN:=.1)
+BIN:=$(shell ls tools/|grep -v dh_nodejs_|grep -v pkgjs-utils)
+MANPAGES:=$(BIN:=.1)
+MAN7PAGES:=$(shell ls doc/man/*.7)
 REGEXPSOURCEFILES:=$(shell ls dh_nodejs/*)
 export NPMIGNOREDEFAULT=$(shell pwd)/dh_nodejs/npmignore.default
-GENENATEDFILES=lib/Debian/Debhelper/Buildsystem/nodejs.pm \
+GENERATEDFILES=lib/Debian/Debhelper/Buildsystem/nodejs.pm \
 	lib/Debian/PkgJs/Banned.pm \
-	autopkgtest/runner
+	lib/Debian/PkgJs/PackageLock.pm \
+	autopkgtest/runner \
+	tools/dh_nodejs_autodocs
+PKGJSLIBVERSION=$(call dpkg_late_eval,PKGJSLIBVERSION,echo '$(DEB_VERSION_UPSTREAM)' | sed -e 's/~.*$$//')
 
 %:
 	dh $@
@@ -21,28 +25,34 @@ GENENATEDFILES=lib/Debian/Debhelper/Buildsystem/nodejs.pm \
 %.1:
 	PERL5LIB=lib help2man --no-discard-stderr -n $* -N --help-option=-h ./tools/$* > $*.1
 
-override_dh_auto_configure: $(GENENATEDFILES)
+%.7: doc/*/README.md
+	S=$@; S=$${S%.7}; S=doc/$${S#doc/man/pkg-js-}/README.md; \
+	if which marked-man; then \
+		cat $$S | sed '/^\[\[_TOC_\]\]$$/d' | marked-man --version $$PKGJSLIBVERSION > $@; \
+	fi
+
+override_dh_auto_configure: $(GENERATEDFILES) lib/Debian/PkgJs/Version.pm
 	dh_auto_configure
 
-$(GENENATEDFILES): $(REGEXPSOURCEFILES)
-	./dh_nodejs/mk_regexp $(GENENATEDFILES)
+$(GENERATEDFILES): $(REGEXPSOURCEFILES)
+	./dh_nodejs/mk_regexp $(GENERATEDFILES)
 
 lib/Debian/PkgJs/Version.pm: debian/changelog
-	perl -i -pe 's/[\d\.]+/'$(DEB_VERSION)'/' lib/Debian/PkgJs/Version.pm
+	perl -i -pe 's/[\d\.]+/'$(PKGJSLIBVERSION)'/' lib/Debian/PkgJs/Version.pm
 
-override_dh_auto_install: lib/Debian/Debhelper/Buildsystem/nodejs.pm $(MANPAGE)
+override_dh_auto_install: lib/Debian/Debhelper/Buildsystem/nodejs.pm $(MANPAGES) $(MAN7PAGES)
 	dh_auto_install
 
-override_dh_installman:
-	rm -f *.1p
-	dh_installman
-	# Remove duplicates
-	for f in debian/pkg-js-tools/usr/share/man/man1/*.1p; do \
-		rm -f $${f%p}; \
-	done
+#override_dh_installman:
+#	rm -f *.1p
+#	dh_installman
+#	# Remove duplicates
+#	for f in debian/pkg-js-tools/usr/share/man/man1/*.1p; do \
+#		rm -f $${f%p}; \
+#	done
 
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 override_dh_auto_test:
 	dh_auto_test
-	debian/tests/pkg-js-autopkgtest
+	PERL5LIB=`pwd`/lib PATH=`pwd`/tools:$$PATH debian/tests/pkg-js-autopkgtest
 endif

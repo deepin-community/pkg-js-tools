@@ -1,9 +1,10 @@
 var gulp = require('gulp');
 var concat = require('gulp-concat');
-gulp.task('default', buildTask);
 
 function buildTask() {
-  return gulp.src('src/*.js')
+  return gulp.src(['src/index.js'])
     .pipe(concat('index.js'))
-    .pipe(gulp.dest('dist',{ sourcemaps: true }))
+    .pipe(gulp.dest('dist'))
 }
+
+exports.build = gulp.series(buildTask);

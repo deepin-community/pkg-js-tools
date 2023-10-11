@@ -1,0 +1,45 @@
+#!/usr/bin/node
+
+let args = process.argv.slice(2);
+
+const system = (cmd, args) => {
+  const out = require('node:child_process').spawn(cmd, args);
+  out.stdout.on('data', data => console.log(data.toString()));
+  out.stderr.on('data', data => console.error(data.toString()));
+  out.on('close', () => process.exit(0));
+}
+
+const usage = () => {
+  console.log('Usage: getFromNpmCache <npm-cache-key>');
+}
+
+if (!args.length) {
+  console.error('A key is required');
+  usage();
+  process.exit(1);
+} else if (args[0] === '--version' || args[0] === '-v') {
+  system('perl', ['-MDebian::PkgJs::Version', '-e', 'print $VERSION']);
+} else if (args[0] === '--help' || args[0] === '-h') {
+  usage();
+  process.exit(0);
+} else {
+  let query = false;
+  if (args[0] === '-q') {
+    query = true;
+    args = args.slice(1);
+  }
+  const path = require("path");
+  const cache = path.join(process.env.HOME,".npm","_cacache");
+  const cacache = require("cacache");
+  
+  cacache.get.info(cache, args[0]).then( info => {
+    if (query) {
+      process.exit(info === null ? 1 : 0);
+    }
+    if (info === null) {
+      console.error('Key not found');
+      process.exit(1);
+    }
+    cacache.get.stream(cache, args[0]).pipe(process.stdout);
+  });
+}

@@ -1,0 +1,109 @@
+#!/bin/bash
+
+set -e
+
+function usage()
+{
+cat <<EOF
+Usage:
+pkgjs-audit <installed-module>
+# OR #
+pkgjs-audit -s <module> <version>
+
+Unless -s option is used, pkgjs-audit searches for a pkgjs-lock.json file, if
+not found, it builds a temporary package-lock.json file using
+(dev)dependencies.
+Then it launches a "npm audit" using these files. This permits one to check
+vulnerabilities in case of bundled package.
+
+If <module> is given, pkgjs-audit uses installed module, else it launch audit
+using current directory.
+
+Options:
+ -s: just query npmjs.org registry with a module name and its version
+
+Copyright (C) Yadd <yadd@debian.org>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+EOF
+}
+function version()
+{
+echo `perl -MDebian::PkgJs::Version -e 'print $VERSION'`
+}
+
+if test "$1" = "--version"; then
+	version
+	exit
+fi
+PKGONLY=0
+while getopts 'vhs' opt; do
+	case $opt in
+		h)
+			usage
+			exit
+			;;
+		v)
+			version
+			exit
+			;;
+		s)
+			PKGONLY=1
+			;;
+		*)
+			echo "Unknown option $opt" >&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+PKG="$1"
+
+if [ "$PKGONLY" == "1" ]; then
+	VER="$2"
+	if [ "$VER" == "" ]; then
+		echo "Missing version" >&2
+		usage
+		exit 1
+	fi
+	perl -MDebian::PkgJs::SimpleAudit -e "print advisories('$PKG','$VER')";
+	exit
+fi
+DIR=`mktemp -d`
+if test "$PKG" != ""; then
+	NPATH=`nodepath $PKG || true`
+	if test "$NPATH" = ""; then
+		echo "$PKG not found" >&2
+		exit 1
+	fi
+else
+	if test -e package.json -o -e package.yaml; then
+		NPATH='.'
+	else
+		echo "Not in a module directory" >&2
+		exit 1
+	fi
+fi
+if test -e "$NPATH/pkgjs-lock.json"; then
+	cp "$NPATH/pkgjs-lock.json" "$DIR/package-lock.json"
+	cp "$NPATH"/package.* "$DIR/"
+else
+	echo "No pkgjs-lock found, generate it"
+	cp "$NPATH"/package.* "$DIR/"
+	RET=`cd "$DIR"; perl -MDebian::PkgJs::PackageLock -e 'exit not buildPackageLock(".","package-lock.json")' || echo NOPKGLOCK`
+fi
+(
+	cd $DIR;
+	echo "# Testing package"
+	perl -MDebian::PkgJs::SimpleAudit -e 'print advisories(".")';
+	echo
+	echo "# Testing dependencies"
+	if [ "$RET" == "NOPKGLOCK" ]; then
+		echo "No dependencies found";
+		exit
+	fi
+	npm audit
+)
+rm -rf "$DIR"
+exit

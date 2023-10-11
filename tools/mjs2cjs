@@ -1,0 +1,73 @@
+#!/bin/bash
+
+set -e
+
+function usage()
+{
+cat <<EOF
+Usage: mjs2cjs <start_file>
+
+mjs2cjs uses a generic rollup.config.mjs to generate a commonjs file in
+dist subdirectory.
+
+Output name is extracted from package.json (field "main") or fallback to
+index.cjs
+
+Options:
+ -b ("bundle"): build a bundle file
+ -o ("out"): outfile
+ -a ("auto"): automatically transform "type:module" package into mix cjs/mjs
+
+Note for "-a" option:
+This option not only build commonjs file but also modify package.json. And if
+a debian/index.cjs exists, it is installed and used in
+"package.json->exports->require" field. This permits one to write a wrapper
+when API change.
+Option "-a" is usable if and only if module is a pure ES module (declared as
+type:module in package.json).
+
+Copyright (C) 2022 Yadd <yadd@debian.org>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+EOF
+}
+
+ROLLUPCONFIG=/usr/share/pkg-js-tools/mjs2cjs.mjs
+DEST_FILE=''
+AUTO=''
+
+if test "$1" = "--version"; then
+	echo `perl -MDebian::PkgJs::Version -e 'print $VERSION'`
+	exit
+fi
+while getopts 'ahbo:' opt; do
+	case $opt in
+		h)
+			usage
+			exit
+			;;
+		b)
+			ROLLUPCONFIG=/usr/share/pkg-js-tools/mjs2cjs-bundle.mjs
+			;;
+		o)
+			DEST_FILE=$OPTARG
+			;;
+		a)
+			AUTO=yes
+			;;
+		*)
+			echo "Unknown option $opt" >&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND-1))
+export START_FILE=$1
+if [ "$AUTO" == "yes" ]; then
+	ENTRY_POINT=${ENTRY_POINT:-${START_FILE}}
+	export ENTRY_POINT
+	perl -MDebian::PkgJs::AutoTransform -e run
+else
+	export DEST_FILE
+	rollup -c $ROLLUPCONFIG
+fi

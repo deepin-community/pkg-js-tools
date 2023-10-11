@@ -2,7 +2,6 @@
 
 set -e
 
-VERSION=0.2
 if test "$1" = "--version"; then
 	echo `perl -MDebian::PkgJs::Version -e 'print $VERSION'`
 	exit
@@ -17,7 +16,7 @@ tool will generate debian/upstream/metadata file. It adds automatically
 the file using "git add" and displays result. You can then modify it.
 Don't forget to launch a "git commit".
 
-Copyright (C) 2019 Xavier Guimard <yadd@debian.org>
+Copyright (C) Yadd <yadd@debian.org>
 
 Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
 EOT
@@ -25,7 +24,8 @@ EOT
 fi
 
 if test "$1" = "--version"; then
-	echo 0.1
+	perl -MDebian::PkgJs::Version -le 'print $VERSION'
+    exit
 fi
 
 if test -e debian/upstream/metadata; then

@@ -4,5 +4,9 @@
  "scripts": {
    "build":"npm run build:init && touch a",
    "build:init":"echo OK && touch b"
+ },
+ "dependencies": {
+   "chalk": "*",
+   "@mdn/browser-compat-data": "*"
  }
 }

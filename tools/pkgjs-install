@@ -1,0 +1,402 @@
+#!/usr/bin/perl
+
+use strict;
+use Dpkg::IPC;
+use Debian::PkgJs::Banned;
+use Debian::PkgJs::Cache;
+use Debian::PkgJs::Dependencies;
+use Debian::PkgJs::Semver;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+use Getopt::Long;
+use JSON;
+use Progress::Any '$progress';
+use Progress::Any::Output;
+
+Progress::Any::Output->set( 'TermProgressBarColor',
+    template =>
+'<color ffff00>%p%</color> <color 808000>[</color>%B<color 808000>]</color>'
+);
+
+my %opt;
+
+GetOptions(
+    \%opt, qw(
+      h|help
+      v|version
+      audit
+      copy
+      install
+      install-command=s
+      ignore
+      nolink|no-link
+      nopackagelock|no-package-lock
+      regenerate
+      prod
+      all
+      strict
+      nodownload|no-download
+    )
+);
+
+if ( $opt{h} ) {
+    print <<EOF;
+Install all dependencies of a JS project using Debian dependencies when
+available.
+
+Options:
+ -h, --help: print this
+ --install: launch install-command if some Debian packages are missing
+ --ignore: ignore missing Debian packages
+ --install-command: command to install mising packages. Default:
+                    "--install-command 'sudo apt install'"
+ --no-link: don't link JS modules from Debian directories
+ --copy: copy modules instead of link them
+ --regenerate: force package-lock.json regeneration
+ --prod: don't install dev dependencies
+ --all: don't remove sub-dependencies of Debian packages (link them and install wanted dependencies)
+ --strict: download JS module if Debian version mismatch (using semver)
+ --no-package-lock: calculate dependencies without npm, implies --no-download. This permits to use pkgjs-install without network connection
+ --audit: don't install or download anything, just print result
+ --no-download: only links available JS modules, don't download anything
+EOF
+    exit;
+}
+elsif ( $opt{v} ) {
+    print "$VERSION\n";
+    exit;
+}
+
+$opt{nodownload} = 1     if $opt{nopackagelock};
+$opt{ignore}     = 1     if $opt{nodownload};
+$opt{strict}     = undef if $opt{nopackagelock};
+
+if ( $opt{ignore} and $opt{install} ) {
+    print STDERR
+      "Both --install and --ignore (or --no-download) chosen, aborting\n";
+    exit 1;
+}
+
+$opt{'install-command'} ||= 'sudo apt install';
+
+# Step 0: generate package-lock.json if needed
+
+my $content;
+if ( $opt{nopackagelock} ) {
+    scanAndInstall( '.', 'dependencies', 'peerDependencies',
+        ( !$opt{prod} ? 'devDependencies' : () ) );
+    exit;
+}
+if ( $opt{regenerate} or not -e 'package-lock.json' ) {
+    eval {
+        spawn(
+            exec => [
+                qw(npm i --package-lock-only --legacy-peer-deps --ignore-scripts)
+            ],
+            wait_child => 1,
+            no_check   => 1,
+        );
+    };
+    if ($@) {
+        print STDERR "$@\n" . ( !$opt{regenerate} ? "Try --regenerate\n" : '' );
+        exit 1;
+    }
+}
+
+# Step 1: read package-lock.json and dispatch modules into lists:
+#          - Debian packages to install
+#          - Debian JS modules to link
+#          - JS modules to download
+
+{
+    open my $f, 'package-lock.json' or die $!;
+    local $/ = undef;
+    $content = JSON::from_json(<$f>);
+    close $f;
+}
+
+unless ( $content->{packages} ) {
+    print STDERR
+"Unable to fine 'packages' key in package-lock.json, use --regenerate option\n";
+    exit 1;
+}
+
+my ( %toLink, %toInstall, %toDownload, %maybeToDownload );
+
+my $ownPackageLock = { packages => {} };
+
+# Reduce package-lock.json to the strict needed
+unless ( $opt{all} ) {
+
+    # Reduce package-lock.json to the needed dependencies only
+    scan(
+        {
+            dependencies => {
+                (
+                    $content->{packages}->{""}->{dependencies}
+                    ? ( %{ $content->{packages}->{""}->{dependencies} } )
+                    : ()
+                ),
+                (
+                    $content->{packages}->{""}->{peerDependencies}
+                    ? ( %{ $content->{packages}->{""}->{peerDependencies} } )
+                    : ()
+                ),
+                (
+                    !$opt{prod} && $content->{packages}->{""}->{devDependencies}
+                    ? ( %{ $content->{packages}->{""}->{devDependencies} } )
+                    : ()
+                )
+            }
+        },
+        ''
+    );
+
+    $content = $ownPackageLock;
+}
+
+# Read package-lock.json content and populate:
+#  - Debian package to install
+#  - Debian modules to link
+#  - JS module to download and install
+M: foreach my $package (
+    sort {
+        my @_a = ( $a =~ m#(node_modules/)#g );
+        my @_b = ( $b =~ m#(node_modules/)#g );
+        @_a <=> @_b || $a cmp $b;
+    } keys %{ $content->{packages} }
+  )
+{
+    next unless $package;                            # Skip "" key
+    next unless $content->{packages}->{$package};    # Skip deleted
+    my $module = $package;
+    while ( $module =~ s#.*?node_modules/## ) {
+        if ( $module =~ m#(.*?)/node_modules/# ) {
+            next M if $toLink{$1};
+        }
+    }
+    $module =~ s#.*node_modules/##;
+    my $wantedVersion = $content->{packages}->{$package}->{version};
+    my $skipDownload =
+      (       -e $package
+          and pjson($package)
+          and pjson($package)->{version}
+          and pjson($package)->{version} eq $wantedVersion );
+    if ( my $debianPackage = availableModules->{$module} ) {
+        $toLink{$module}++;
+        unless ( installedModules->{$module} ) {
+            push @{ $toInstall{$debianPackage} }, $module;
+            push @{ $maybeToDownload{$module} },
+              [
+                {
+                    dest => $package,
+                    url  => $content->{packages}->{$package}->{resolved},
+                    wantedVersion => $wantedVersion,
+                }
+              ];
+        }
+        elsif ( $opt{strict} ) {
+            my $debianVersion =
+              pjson( installedModules->{$module} )->{version};
+            if (
+                $wantedVersion
+                and not( $debianVersion
+                    and semver( $debianVersion, '^' . $wantedVersion ) )
+              )
+            {
+                $toLink{$module}--;
+                delete $toLink{$module} unless $toLink{$module};
+                $toDownload{$package} =
+                  $content->{packages}->{$package}->{resolved}
+                  unless $skipDownload;
+            }
+        }
+        delete $content->{packages}->{$package};
+        delete $content->{dependencies}->{$module};
+    }
+    else {
+        $toDownload{$package} = $content->{packages}->{$package}->{resolved}
+          unless $skipDownload;
+    }
+}
+
+# Summary
+print scalar(%toLink)
+  . ' modules '
+  . ( $opt{nolink} ? 'already availables' : 'to link' ) . "\n";
+print scalar(%toDownload) . " modules to download\n";
+if ( $opt{audit} ) {
+    print scalar(%toInstall) . " packages to install\n" if %toInstall;
+    print "Missing dependencies:\n";
+    print join( ' ', map { s#.*/##; $_ } keys %toDownload ) . "\n";
+    exit;
+}
+
+# Step 2: download missing Debian packages if needed
+
+if (%toInstall) {
+    unless ( $opt{install} or $opt{ignore} ) {
+        print STDERR "\nThe following packages are needed, choose one of "
+          . "--ignore or --install\n"
+          . join( ' ', sort keys %toInstall ) . "\n";
+        exit 1;
+    }
+    if ( $opt{install} ) {
+        print scalar(%toInstall) . " packages to install\n";
+        spawn(
+            exec => [
+                'sh',
+                '-c',
+                $opt{'install-command'} . ' '
+                  . join( ' ', sort keys %toInstall )
+            ],
+            wait_child => 1,
+        );
+    }
+}
+
+mkdir 'node_modules';
+
+# Step 3: link Debian JS modules into node_modules if needed
+
+# Reset cache
+installedModules(1);
+foreach my $module ( keys %toLink ) {
+    if ( installedModules->{$module} ) {
+        if ( $opt{strict} and $maybeToDownload{$module} ) {
+            my $continue = 0;
+            foreach my $tmp ( @{ $maybeToDownload{$module} } ) {
+                my $debianVersion =
+                  pjson( installedModules->{$module} )->{version};
+                if (
+                    $tmp->{wantedVersion}
+                    and not( $debianVersion
+                        and
+                        semver( $debianVersion, '^' . $tmp->{wantedVersion} ) )
+                  )
+                {
+                    $toDownload{ $tmp->{path} } = $tmp->{url};
+                }
+                else {
+                    $continue = 1;
+                }
+            }
+            next unless $continue;
+        }
+        unless ( $opt{nolink} ) {
+
+            if ( $module =~ m#(.*)/# ) {
+                mkdir "node_modules/$1";
+            }
+            spawn(
+                exec       => [ 'rm', '-rf', "node_modules/$module" ],
+                wait_child => 1
+            );
+            if ( $opt{copy} ) {
+                spawn(
+                    exec => [
+                        'cp',                        '-a',
+                        installedModules->{$module}, "node_modules/$module"
+                    ],
+                    wait_child => 1
+                );
+            }
+            else {
+                symlink installedModules->{$module}, "node_modules/$module";
+            }
+        }
+    }
+}
+
+# Step 4: download missing
+
+my %from;
+unless ( $opt{nodownload} ) {
+    $progress->target( scalar %toDownload );
+    my $notCache = not( -e "$ENV{HOME}/.npm/_cacache" );
+
+    if (%toDownload) {
+        print "Downloading...\n";
+        foreach my $modulePath ( keys %toDownload ) {
+            $progress->update( message => $modulePath );
+            $from{
+                downloadAndInstall( $modulePath, $toDownload{$modulePath},
+                    undef, $notCache )
+            }++;
+        }
+        $progress->finish();
+        print "Done (" . join(
+            ',',
+            map {
+                    $from{$_}
+                  ? $from{$_} . ' '
+                  . {
+                    0 => 'not found',
+                    1 => 'downloaded',
+                    2 => 'from npm cache'
+                  }->{$_}
+                  : ()
+            } ( 0 .. 2 )
+        ) . ")\n";
+    }
+}
+
+# Internal subroutine to reduce package-lock.json
+my %seen;
+
+sub scan {
+    my ( $package, $offset ) = @_;
+    return if $seen{$package};
+    $seen{$package}++;
+    return
+      unless $package->{dependencies} and %{ $package->{dependencies} };
+    foreach my $dep ( keys %{ $package->{dependencies} } ) {
+        next if $ownPackageLock->{packages}->{"$offset/node_modules/$dep"};
+        my $tmp      = $offset;
+        my $continue = 1;
+      D: do {
+            if (    $continue
+                and $content->{packages}->{"${tmp}node_modules/$dep"} )
+            {
+                $ownPackageLock->{packages}->{"${tmp}node_modules/$dep"} =
+                  $content->{packages}->{"${tmp}node_modules/$dep"};
+                scan( $content->{packages}->{"${tmp}node_modules/$dep"},
+                    "${tmp}node_modules/$dep/" )
+                  unless availableModules->{$dep};
+                $continue = 0;
+            }
+        } while ( $tmp =~ s#node_modules/.*?$## );
+    }
+}
+
+sub scanAndInstall {
+    my ( $path, @fields ) = @_;
+    @fields = ( 'dependencies', 'peerDependencies' ) unless @fields;
+    my @deps;
+    foreach (@fields) {
+        my $tmp;
+        if ( ( $tmp = pjson($path)->{$_} ) and ref $tmp ) {
+            push @deps, keys %$tmp;
+        }
+    }
+    mkdir 'node_modules';
+    foreach my $mod (@deps) {
+        next if -e "node_modules/$mod";
+        next unless installedModules->{$mod};
+        if ( $mod =~ m#(.*)/# ) {
+            mkdir "node_modules/$1";
+        }
+
+        if ( $opt{copy} ) {
+            spawn(
+                exec =>
+                  [ 'cp', '-a', installedModules->{$mod}, "node_modules/$mod" ],
+                wait_child => 1,
+            );
+            scanAndInstall("node_modules/$mod");
+        }
+        else {
+            symlink installedModules->{$mod}, "node_modules/$mod";
+        }
+    }
+}

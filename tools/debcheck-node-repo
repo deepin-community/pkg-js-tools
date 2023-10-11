@@ -20,7 +20,7 @@ debcheck-node-repo check consistence between debian/watch and npm registry.
 
 Launch it in a debian/node source repository.
 
-Copyright (C) 2019 Xavier Guimard <yadd\@debian.org>
+Copyright (C) Yadd <yadd\@debian.org>
 
 Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
 EOF
@@ -53,8 +53,10 @@ sub check {
     unless ($uscan_version) {
         print STDERR "Uscan didn't find any version.\n";
         $res++;
-        $thr[2]->join();
-        return;
+
+        #$thr[2]->join();
+        $uscan_version = 0;
+        $uscan_url     = '';
     }
 
     my $npm_cmp   = Dpkg::Version->new( "$npm_version-0",   check => 0 );
@@ -71,7 +73,8 @@ EOF
     }
 
     my $uscan_orig = url_part($uscan_url);
-    if ( $npm_orig ne $uscan_orig
+    if (    $uscan_orig
+        and $npm_orig ne $uscan_orig
         and not $uscan_orig =~ /(?:fakeupstream\.cgi|registry\.npm)/ )
     {    # TODO: Check tags
         $res++;

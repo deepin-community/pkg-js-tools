@@ -1,7 +1,7 @@
 use 5.028001;
 use ExtUtils::MakeMaker;
 
-my @exe = map {chomp; $_} split /\s+/, `ls tools/*`;
+my @exe = map {chomp; $_} split /\s+/g, `ls tools/*`;
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.

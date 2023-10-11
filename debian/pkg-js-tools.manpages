@@ -1,1 +1,10 @@
-*.1
+debcheck-node-repo.1
+dh-make-node.1
+doc/man/pkg-js-tools.7
+getFromNpmCache.1
+github-debian-upstream.1
+pkgjs-audit.1
+pkgjs-depends.1
+pkgjs-easy-to-update.1
+pkgjs-install.1
+pkgjs-ls.1

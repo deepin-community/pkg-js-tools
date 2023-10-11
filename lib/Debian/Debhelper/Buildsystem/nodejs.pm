@@ -1,6 +1,6 @@
 # A debhelper build system class for handling pkg-js-autopkgtest test.
 #
-# Copyright: 2019, Xavier Guimard <yadd@debian.org>
+# Copyright: Yadd <yadd@debian.org>
 # License: GPL-2+
 
 package Debian::Debhelper::Buildsystem::nodejs;
@@ -10,7 +10,9 @@ use warnings;
 use Debian::Debhelper::Dh_Lib;
 use File::Find;
 use JSON;
+use Graph;
 use IPC::Run qw(run);
+use Debian::PkgJs::PackageLock;
 use Debian::PkgJs::Utils;
 use parent qw(Debian::Debhelper::Buildsystem);
 
@@ -19,6 +21,8 @@ use constant MAX_BUILD_LOOP => 3;
 sub NPMIGNOREDEFAULT {
     $ENV{NPMIGNOREDEFAULT} || '/usr/share/pkg-js-tools/npmignore.default';
 }
+
+set_debug(1);
 
 # echo, touch and ls are here to help tests
 my @known_build_commands = (qw(grunt echo touch ls));
@@ -31,34 +35,35 @@ my @knwonBuildFiles = (
     [ 'Gruntfile.coffee' => ['grunt'] ],
 
     #[ 'tsconfig.json'     => ['tsc'] ],
-    #[ 'gulpfile.js' => ['gulp'] ],
-    #[ 'rollup.config.js'  => [ 'rollup', '-c' ] ],
-    #[ 'webpack.config.js' => ['webpack'] ],
-    #[ 'webpackfile.js'    => ['webpack'] ],
+    [ 'gulpfile.js'       => ['gulp'] ],
+    [ 'rollup.config.js'  => [ 'rollup',  '-c' ] ],
+    [ 'rollup.config.mjs' => [ 'rollup',  '-c' ] ],
+    [ 'webpack.config.js' => [ 'webpack', '--mode', 'production' ] ],
+    [ 'webpackfile.js'    => [ 'webpack', '--mode', 'production' ] ],
 );
 
 my $knownCommandMap = { babel => 'babeljs', };
 
-my $noexecFiles = qr/\.(?:js|json|ts)/;
+my $noexecFiles = qr/\.(?:[cm]?js|json|[cm]?ts)/;
 
 sub DEBUG     { $ENV{DEB_BUILD_PKG_JS_DEBUG} }
 sub DEBUGFILE { $ENV{DEB_BUILD_PKG_JS_DEBUG_FILE} }
 
 sub DESCRIPTION {
-    "pkg-js-tools test";
+    "dh-sequence-nodejs";
 }
 
 ### CONSTANTS
 
 # Regexp compiled from dh_nodejs/dh_root_files.excluded
 my $rootFilesIgnored =
-qr/^(?:(?:g(?:ulpfile\.(?:babel\.j|(?:t|j))|runt(?:file)?\.j)|(?:rollup[\.\-].*config|karma\.conf|.mocharc)\.j)s|b(?:abel\.config\.js(?:on)?|inding\.gyp|ench.*\.js|ower\.json)|c(?:o(?:mponent\.json|ntribute|pying)|hange(?:log|s?)|akefile)|a(?:ut(?:otest\.watchr|hors?)|va\.config\.js|ppveyor\.yml)|j(?:est\.config\.js|sl\.node\.conf)|.*\.(?:m(?:arkdown|d)|pdf|txt)|t(?:sconfig\.json|ests?\.js)|l(?:icen[cs]e.*|erna\.json)|\.(?:babelrc(?:.js)?|.*)|(?:Docker|make)file|package-lock\.json|yarn\.lock|history)$/i;
+qr/^(?:(?:g(?:ulpfile\.(?:babel\.m?j|(?:t|m?j))|runt(?:file)?\.j)|(?:rollup[\.\-].*config|karma\.conf)\.j)s|j(?:a(?:kefile(?:\.js)?|smine\.json)|est\.config\.js|sl\.node\.conf)|b(?:abel\.config\.js(?:on)?|inding\.gyp|ench.*\.js|ower\.json)|c(?:o(?:mponent\.json|ntribute|pying)|hange(?:log|s?)|akefile)|a(?:ut(?:otest\.watchr|hors?)|va\.config\.js|ppveyor\.yml)|\.(?:babelrc(?:\.js(?:on)?)?|mocharc\.js(?:on)?|.*)|.*\.(?:m(?:arkdown|d)|pdf|txt)|t(?:sconfig.*\.json|ests?\.js)|l(?:icen[cs]e.*|erna\.json)|(?:docker|make)file|package-lock\.json|yarn\.lock|history)$/i;
 my $filesIgnored =
-qr/^(?:\.(?:(?:wafpickle-|eslint|_).*|npm(?:ignore|rc)|lock-wscript|gitignore)|.*\.(?:c(?:offee|\+\+|cp?)?|orig|def|mk|h)|(?:[jm]|binding.M)akefile|readme(?:\.(?:txt|md))?|package-lock\.json|npm-debug\.log|yarn\.lock)$/i;
+qr/^(?:\.(?:(?:wafpickle-|eslint|_).*|npm(?:ignore|rc)|lock-wscript|gitignore)|.*\.(?:c(?:offee|\+\+|cp?)?|orig|def|mk|h)|(?:[jm]|binding.M)akefile|readme(?:\.(?:txt|md))?|tsconfig\.tsbuildinfo|package-lock\.json|npm-debug\.log|yarn\.lock)$/i;
 
 # Regexp compiled from dh_nodejs/dh_dirs.excluded
 my $dirIgnored =
-qr{^(?:(?:.*/)?(?:\.(?:_.*|git|svn|hg)|.(?:DS_Store|deps)|__[^/]*__|fixtures?|CVS)|(?:archived-packag|node_modul)es|(?:example|test|doc)s?|bench|\..*)(?:/.*)?}i;
+qr{^(?:(?:.*/)?(?:\.(?:_.*|git|svn|hg)|.(?:DS_Store|deps)|__[^/]*__|fixtures?|CVS)|(?:archived-packag|node_modul)es|t(?:ap-snapshots|ests?)|(?:example|doc)s?|bench|\..*)(?:/.*)?}i;
 
 # Extensions that overrides $rootFilesIgnored if set in package.json#files
 my $authorizedExt = qr/\.(?:js)$/;
@@ -84,13 +89,15 @@ sub pattern {
     @dirs = map {
         my $s = quotemeta($_);
         $s =~ s#\\\*#[^/]*#g;
+        $s =~ s#\\\((.*?)\\\)#(?:$1)?#g;
+        $s =~ s#\\\[(.*?)\\\]#[$1]#g;
         while ( $s =~ s/\\\{(.*?)\\\}/_____/ ) {
             my $tmp = '(?:' . join( '|', split( /\\?,/, $1 ) ) . ')';
             $s =~ s/_____/$tmp/;
         }
         $s
     } @dirs;
-    my $pat = "^$p/" . join( '.*(?<=/)', @dirs ) . '$';
+    my $pat = "^$p/" . join( '.*(?<=/)', @dirs ) . '(?:/.*)?$';
     print "Line $tmp becomes: $pat\n";
     eval { $pattern = qr/$pat/ };
     error << "EOF" if ($@);
@@ -134,7 +141,7 @@ sub build_module {
     else {
         print "No build command found, searching known files\n";
         foreach my $i (@knwonBuildFiles) {
-            if ( -e $i->[0] ) {
+            if ( -e "$dir/$i->[0]" ) {
                 push @commands, $i->[1];
             }
         }
@@ -206,6 +213,7 @@ sub resolve_command {
     return @commands;
 }
 
+# Symlinks methods
 sub dolink {
     my ( $self, $src, $dest ) = @_;
     return if $src eq $dest;
@@ -290,7 +298,8 @@ sub install_module {
         }
         $noFilesField = 0;
         push @files,
-          grep { $_ ne "$dir/package.json" } $self->readFilesField(
+          grep { $_ ne "$dir/package.json" and $_ ne "$dir/package.yaml" }
+          $self->readFilesField(
             $dir,
             ( map { s/^/!/; s/^\!\!//; $_ } ( $self->open_file($npmignore) ) )
           );
@@ -299,11 +308,14 @@ sub install_module {
         print qq{No "files" field in $dir/package.json, install all files\n};
         @files = ($dir);
         push @files,
-          grep { $_ ne "$dir/package.json" } $self->readFilesField(
+          grep { $_ ne "$dir/package.json" and $_ ne "$dir/package.yaml" }
+          $self->readFilesField(
             $dir,
             ( map { s/^/!/; s/^\!\!//; $_ } ( $self->open_file($npmignore) ) )
           );
+        print "Files to install: " . join( ', ', @files ) . "\n";
     }
+    push @files, autoexcluded() if $dir eq '.';
     my @dest;
     my $mainFile =
       $self->toJs( $dir, $self->pjson($dir)->{main} || "index.js" );
@@ -324,7 +336,7 @@ sub install_module {
         if ( $p =~ s/\!(.*)$// ) {
             push @files, "!$p$1";
         }
-        if ( $p =~ m/[\*|\{]/ ) {
+        if ( $p =~ m/[\*|\{\(]/ ) {
             ( $p, $pattern ) = $self->pattern($p);
         }
         unless ( -e $p ) {
@@ -398,7 +410,8 @@ sub install_module {
                         push @dest, [ $d, $File::Find::name ];
                         $foundMain    = 1 if $File::Find::name eq $mainFile;
                         $foundPkgJson = 1
-                          if $File::Find::name eq 'package.json';
+                          if $File::Find::name eq 'package.json'
+                          or $File::Find::name eq 'package.yaml';
                     }
 
                     # Debug
@@ -440,7 +453,11 @@ EOF
         }
     }
     unless ($foundPkgJson) {
-        push @dest, [ '', "$dir/package.json" ];
+        push @dest,
+          [
+            '',
+            -e "$dir/package.yaml" ? "$dir/package.yaml" : "$dir/package.json"
+          ];
     }
 
     # Install files in build dir
@@ -459,6 +476,7 @@ EOF
                 "$path/$_->[0]/" );
         }
     }
+    buildPackageLock( $dir, "$path/pkgjs-lock.json", 1 );
 }
 
 sub filesFieldToList {
@@ -489,8 +507,10 @@ sub readFilesField {
           or /[\{\*\!]/;
         $_ ? "$prefix$dir/$_" : ();
     } @lines;
-    push @files, "$dir/package.json"
-      unless grep { $_ eq "$dir/package.json" } @files;
+    push @files,
+      ( -e "$dir/package.yaml" ? "$dir/package.yaml" : "$dir/package.json" )
+      unless grep { $_ eq "$dir/package.json" or $_ eq "$dir/package.yaml" }
+      @files;
     return @files;
 }
 
@@ -505,36 +525,25 @@ sub toJs {
 
 sub cmp_ordered_list {
     my ( $self, $components ) = @_;
+    my $g = Graph->new;
     $components //= $self->component_list;
-    my @dirs = ( sort keys %$components );
-    my @res;
+    $g->add_vertices( keys %$components );
     if ( -e 'debian/nodejs/build_order' ) {
-        @res = map {
-            my $cmp = $_;
-            error "Unknown component $_" unless $components->{$cmp};
-            @dirs = grep { $_ ne $cmp } @dirs;
-            $cmp;
-        } $self->open_file('debian/nodejs/build_order');
+        $g->add_path( $self->open_file('debian/nodejs/build_order') );
     }
     if ( -e 'debian/nodejs/component_links' ) {
-        my %lt;
-        my %firsts;
         map {
             error "Malformed line $. in debian/nodejs/component_links: $_"
               unless /^([\w\-\.\/]+)\s+([\w\-\.\/]+)$/;
-            $lt{$1}     = $2;
-            $firsts{$1} = 1;
+            $g->add_edge( $1, $2 );
         } $self->open_file('debian/nodejs/component_links');
-        @dirs =
-          sort {
-                ( $lt{$a} and $lt{$a} eq $b ) ? -1
-              : ( $lt{$b} and $lt{$b} eq $a ) ? 1
-              : $firsts{$a}                   ? -1
-              : $firsts{$b}                   ? 1
-              : $a cmp $b
-          } @dirs;
     }
-    push @res, @dirs;
+    my @res;
+    eval { @res = $g->toposort };
+    if ($@) {
+        die
+'Unable to resolve components build order: probably cyclic dependencies';
+    }
     return @res;
 }
 
@@ -548,7 +557,7 @@ sub new {
 
 sub check_auto_buildable {
     my $self = shift;
-    if ( -e 'package.json' ) {
+    if ( -e 'package.json' or -e 'package.yaml' ) {
         return 1;
     }
     return 0;
@@ -556,144 +565,9 @@ sub check_auto_buildable {
 
 # auto_configure step: if component are found, create node_modules links
 sub configure {
-    my $self       = shift;
-    my $components = $self->component_list;
-    my @dirs       = ( sort keys %$components );
-    return
-         unless @dirs
-      or -e 'debian/nodejs/' . $self->main_package . '/extlinks'
-      or -e 'debian/nodejs/' . $self->main_package . '/extcopies'
-      or -d 'debian/build_modules' && $self->main_package eq '.';
-    $self->doit_in_builddir( 'mkdir', 'node_modules' )
-      unless -e 'node_modules';
-
-    # External links
-    foreach my $dir (
-        (
-            $self->main_package
-            ? (
-                $self->main_package ne '.'
-                ? ( $self->main_package, '.' )
-                : ('.')
-            )
-            : ('.')
-        ),
-        @dirs
-      )
-    {
-        if ( -e "debian/nodejs/$dir/extlinks" ) {
-            map {
-                my ( $in, $src );
-                $_ =~ s/\s+(\S*).*?$//;
-                if (
-                        $1
-                    and $1 eq 'test'
-                    and (
-                        (
-                                $ENV{DEB_BUILD_OPTIONS}
-                            and $ENV{DEB_BUILD_OPTIONS} =~ /\bnocheck\b/
-                        )
-                        or (    $ENV{DEB_BUILD_PROFILES}
-                            and $ENV{DEB_BUILD_PROFILES} =~ /\bnocheck\b/ )
-                    )
-                  )
-                {
-                    print STDERR "Skipping $_ link\n";
-                }
-                else {
-                    run [ 'nodepath', $_ ], \$in, \$src;
-                    if ( $? or not $src ) {
-                        print STDERR
-                          "### $_ is required by debian/nodejs/$dir/extlinks"
-                          . " but not available\n";
-                        exit 1;
-                    }
-                    else {
-                        chomp $src;
-                        my $tmp = $src;
-                        $tmp =~ s#^.*?nodejs/##;
-                        $tmp =~ s#/.*?$## or $tmp = '';
-                        $tmp = "$tmp/" if $tmp;
-                        $self->dolink( $src, "$dir/node_modules/$tmp" );
-                    }
-                }
-            } $self->open_file("debian/nodejs/$dir/extlinks");
-        }
-        if ( -e "debian/nodejs/$dir/extcopies" ) {
-            map {
-                my ( $in, $src );
-                $_ =~ s/\s+(\S*).*?$//;
-                if (
-                        $1
-                    and $1 eq 'test'
-                    and (
-                        (
-                                $ENV{DEB_BUILD_OPTIONS}
-                            and $ENV{DEB_BUILD_OPTIONS} =~ /\bnocheck\b/
-                        )
-                        or (    $ENV{DEB_BUILD_PROFILES}
-                            and $ENV{DEB_BUILD_PROFILES} =~ /\bnocheck\b/ )
-                    )
-                  )
-                {
-                    print STDERR "Skipping $_ copy\n";
-                }
-                else {
-                    run [ 'nodepath', $_ ], \$in, \$src;
-                    if ( $? or not $src ) {
-                        print STDERR
-                          "### $_ is required by debian/nodejs/$dir/extcopies"
-                          . " but not available\n";
-                        exit 1;
-                    }
-                    else {
-                        chomp $src;
-                        my $dst = $src;
-                        $dst =~ s#.*?nodejs/##;
-                        if ( $dst =~ s#/[^/]*$## ) {
-                            $self->doit_in_builddir( 'mkdir', '-p',
-                                "$dir/node_modules/$dst" );
-                        }
-                        else {
-                            $dst = '';
-                        }
-                        $self->doit_in_builddir( 'cp', '-rL', $src,
-                            "$dir/node_modules/$dst" );
-                    }
-                }
-            } $self->open_file("debian/nodejs/$dir/extcopies");
-        }
-    }
-
-    # Link each component in node_modules
-    foreach my $component (@dirs) {
-        my $package = $components->{$component};
-        $self->dolink( "$component", "node_modules/$package" )
-          unless -e "debian/nodejs/$component/nolink";
-    }
-
-    # Links between components
-    if ( -e 'debian/nodejs/component_links' ) {
-        my %links = map {
-            error "Malformed line $. in debian/nodejs/component_links: $_"
-              unless /^([\w\-\.\/]+)\s+([\w\-\.\/]+)$/;
-            my ( $src, $dest ) = ( $1, $2 );
-            foreach my $s ( $src, $dest ) {
-                error "component_links: Unknown component $s"
-                  unless $components->{$s};
-            }
-            ( $src => $dest );
-        } $self->open_file('debian/nodejs/component_links');
-        foreach ( keys %links ) {
-            $self->dolink( $_, "$links{$_}/node_modules/$components->{$_}" );
-        }
-    }
-
-    # Links all modules found in debian/build_modules
-    my @buildMods = list_build_modules();
-    foreach my $mod (@buildMods) {
-        $self->dolink( "debian/build_modules/$mod", "node_modules/$mod" );
-    }
+    link_external_modules();
+    link_internal_modules();
+    link_build_modules();
 }
 
 # build step
@@ -709,7 +583,7 @@ sub build {
         warning "Aborting auto_build\n";
 
         # To avoid hard transition, this step never fail
-        #exit 1;
+        exit 1;
     }
 }
 
@@ -746,10 +620,17 @@ sub test {
     if ( -e $testfile ) {
         $self->doit_in_builddir( '/bin/sh', '-ex', $testfile );
     }
-    else {
-        $self->doit_in_builddir( '/usr/bin/node', '-e',
-            'require("./' . $self->main_package . '")' )
-          if $self->main_package;
+    elsif ( $self->main_package ) {
+        if (    $self->pjson( $self->main_package )->{type}
+            and $self->pjson( $self->main_package )->{type} eq 'module' )
+        {
+            print
+"Found type=module, skipping require test (will do in autopkgtest)\n";
+        }
+        else {
+            $self->doit_in_builddir( '/usr/bin/node', '-e',
+                'require("./' . $self->main_package . '")' );
+        }
     }
     foreach (@testlinks) {
         print "Removing node_modules/$_\n";
@@ -764,7 +645,7 @@ sub test {
 sub install {
     my $self    = shift;
     my $destdir = shift;
-    my @pkgs    = getpackages();
+    my @pkgs    = grep { /\w/ } getpackages();
     my ($package) =
       $#pkgs ? ( grep { $_ =~ /^node-/ } getpackages() ) : @pkgs;
     ($package) = @pkgs unless ($package);
@@ -812,7 +693,7 @@ EOT
             %root_cmp = map {
                 my $s = $_;
                 map { ( $_ => 1 ) } glob($s)
-            } $self->open_file('debian/nodejs/root_modules');
+            } @lines;
         }
     }
     elsif ( !$self->main_package ) {
@@ -866,6 +747,10 @@ EOT
             if ( defined( $v = $self->pjson($dir)->{version} ) ) {
                 $tmp .= " (= $v)";
             }
+            else {
+                print STDERR
+                  "# WARNING: missing version for component $tmp ($dir)\n";
+            }
             push @provides, $tmp;
         }
     }
@@ -875,8 +760,13 @@ EOT
     if ( $package ne $pname ) {
         my $tmp = $pname;
         my $v;
-        if ( -e $self->main_package . "/package.json"
-            and defined( $v = $self->pjson( $self->main_package )->{version} ) )
+        if (
+            (
+                   -e $self->main_package . "/package.json"
+                or -e $self->main_package . "/package.yaml"
+            )
+            and defined( $v = $self->pjson( $self->main_package )->{version} )
+          )
         {
             $tmp .= " (= $v)";
         }
@@ -888,34 +778,41 @@ EOT
     if (@provides) {
         print "Populate \${nodejs:Provides}:\n";
         print " + $_\n" foreach (@provides);
-        addsubstvar( $package, 'nodejs:Provides', join( ', ', @provides ) );
+        foreach my $pkg (@pkgs) {
+            addsubstvar( $pkg, 'nodejs:Provides', join( ', ', @provides ) );
+        }
+    }
+    if ( my $_builtUsing = builtUsing() ) {
+        foreach my $pkg (@pkgs) {
+            addsubstvar( $pkg, 'nodejs:BuiltUsing', $_builtUsing );
+        }
     }
 
-    {
-        my ( $in, $src );
-        if ( -e 'debian/node-node-expat.substvars' ) {
-            run [
-                'grep', '-Po',
-                'shlibs:Depends=.*libnode\d+ \(>= \K\S+(?=\))',
-                'debian/node-node-expat.substvars'
-              ],
-              \$in, \$src;
+    my ( $in, $src );
+    if ( -e 'debian/node-node-expat.substvars' ) {
+        run [
+            'grep', '-Po',
+            'shlibs:Depends=.*libnode\d+ \(>= \K\S+(?=\))',
+            'debian/node-node-expat.substvars'
+          ],
+          \$in, \$src;
+    }
+    if ( not $src ) {
+        run [
+            'dpkg-query', '--showformat=${source:Upstream-Version}',
+            '--show',     'nodejs'
+          ],
+          \$in, \$src;
+    }
+    if ( not $src or $? ) {
+        print STDERR "### node version not found\n";
+    }
+    else {
+        chomp $src;
+        foreach my $pkg (@pkgs) {
+            addsubstvar( $pkg, 'nodejs:Version', $src );
         }
-        if ( not $src ) {
-            run [
-                'dpkg-query', '--showformat=${source:Upstream-Version}',
-                '--show',     'nodejs'
-              ],
-              \$in, \$src;
-        }
-        if ( not $src or $? ) {
-            print STDERR "### node version not found\n";
-        }
-        else {
-            chomp $src;
-            addsubstvar( $package, 'nodejs:Version', $src );
-            print "Set \${nodejs:Version} to $src\n";
-        }
+        print "Set \${nodejs:Version} to $src\n";
     }
 
     # Links
@@ -940,35 +837,13 @@ sub clean {
     my $self       = shift;
     my $components = $self->component_list;
     my @dirs       = ( sort keys %$components );
-    foreach my $dir ( $self->main_package, @dirs ) {
-        $self->doit_in_sourcedir( 'rm', '-rf', "$dir/node_modules/.cache" );
-        if ( -e "debian/nodejs/$dir/extlinks" ) {
-            map {
-                s/\s.*$//;
-                $self->do_unlink("$dir/node_modules/$_");
-            } $self->open_file("debian/nodejs/$dir/extlinks");
-        }
-        if ( -e "debian/nodejs/$dir/extcopies" ) {
-            map {
-                s/\s.*$//;
-                $self->doit_in_builddir( 'rm', '-rf', "$dir/node_modules/$_" );
-            } $self->open_file("debian/nodejs/$dir/extcopies");
-        }
+    foreach my $dir ( main_package, @dirs ) {
+        $self->doit_in_sourcedir( 'rm', '-rf', "$dir/node_modules/.cache",
+            "$dir/.nyc_output" );
+        clean_own_stuff($dir);
     }
-    if ( -e 'debian/nodejs/component_links' ) {
-        map {
-            error "Malformed line $. in debian/nodejs/component_links: $_"
-              unless /^([\w\-\.\/]+)\s+([\w\-\.\/]+)$/;
-            my ( $src, $dest ) = ( $1, $2 );
-            $self->do_unlink("$dest/node_modules/$components->{$src}");
-        } $self->open_file('debian/nodejs/component_links');
-    }
-    foreach my $component ( $self->main_package, @dirs ) {
-        my $package = $components->{$component};
-
-        # Error not catched here
-        $self->do_unlink("node_modules/$package") if $package;
-    }
+    clean_external_modules;
+    clean_internal_modules;
     clean_build_modules();
     clean_test_modules();
 
@@ -976,6 +851,9 @@ sub clean {
     if ( my $p = $self->main_package ) {
         $self->do_unlink( 'node_modules/' . $self->pjson($p)->{name} );
     }
+
+    # Try to clean node_modules
+    rmdir 'node_modules';
 }
 
 sub auto_install_dir {

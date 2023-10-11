@@ -1,0 +1,1047 @@
+.TH "PKG\-JS\-TOOLS" "7" "May 2023"
+.SH "NAME"
+\fBpkg-js-tools\fR \- collection of tools to aid packaging Node modules in Debian\.
+.SH WORKING WITH SALSA\.DEBIAN\.ORG REPOSITORY
+.P
+To use salsa(1) with pkg\-javascript configuration, add something like that in
+.br
+your \.bashrc:
+.RS 2
+.nf
+alias js\-salsa='salsa \-\-conf\-file +/usr/share/pkg\-js\-tools/pkg\-js\-salsa\.conf'
+.fi
+.RE
+.P
+Then you can use salsa simply\. Some examples:
+
+.RS 1
+.IP \(bu 2
+if you created a local repo and want to create and push it on
+.br
+.UR https://salsa.debian.org/js-team
+.I salsa
+.UE ,
+launch simply:
+.P
+js\-salsa push_repo \.
+.IP \(bu 2
+to configure a repo already pushed:
+.P
+js\-salsa update_safe node\-foobar
+.IP \(bu 2
+to clone locally a js\-team package:
+.P
+js\-salsa co node\-foobar
+
+.RE
+.P
+See salsa(1) for more\.
+.SH DEBHELPER ADDON
+.P
+\fBpkg\-js\-tools\fR debhelper addon is automatically loaded if a package
+.br
+build\-depends on \fBdh\-sequence\-nodejs\fR or \fI(old fashion)\fR if \fBdh\fP is called
+.br
+with \fB\-\-with nodejs\fR in \fBdebian/rules\fP\|\.
+.SS Quick use
+.P
+Examples of basic migration to pkg\-js\-tools:
+.br
+.UR https://salsa.debian.org/js-team/node-static-module/-/commit/2c6d9fb1
+.I Switch test and install to pkg-js-tools
+.UE
+.SS How it works
+.P
+pkg\-js\-tools provides hooks for these steps:
+.TS
+tab(|) expand nowarn box;
+l l.
+T{
+Step
+T}|T{
+Comment
+T}
+=
+T{
+\fBconfigure\fR
+T}|T{
+populate \fBnode_modules/\fP
+T}
+_
+T{
+\fBbuild\fR
+T}|T{
+build components and main module
+T}
+_
+T{
+\fBtest\fR
+T}|T{
+test components and main module
+T}
+_
+T{
+\fBinstall\fR
+T}|T{
+install components and main module
+T}
+_
+T{
+\fBinstalldocs\fR
+T}|T{
+can auto\-generate docs for each component
+T}
+_
+T{
+\fBclean\fR
+T}|T{
+clean pkg\-js\-tools stuff
+T}
+.TE
+.P
+Technically, it adds \fB\-\-buildsystem=nodejs\fP to the corresponding \fBdh_auto_<step>\fP
+.br
+command\.
+.P
+\fBImportant note\fR\|\. Here:
+
+.RS 1
+.IP \(bu 2
+\fBcomponent\fR is the directory name of a submodule \fI(uscan(1) component or
+.br
+additional components listed in \fBdebian/nodejs/additional_components\fP)\fR\|\.
+.br
+Example: \fBtypes\-glob\fP
+.IP \(bu 2
+\fBmodule\fR is the npmjs name\. Example: \fB@types/glob\fP
+
+.RE
+.P
+See 
+.UR https://wiki.debian.org/Javascript/GroupSourcesTutorial
+.I Group Sources Tutorial
+.UE
+
+.br
+for more about embedding components\.
+.P
+Details:
+
+.RS 1
+.IP \(bu 2
+\fBdh_auto_clean\fR, cleans files automatically installed by \fBpkg\-js\-tools\fR
+.br
+itself
+.IP \(bu 2
+\fBdh_auto_configure\fR, automatically populates \fBnode_modules\fP directory:
+.RS 1
+.IP \(bu 2
+links embedded components
+.IP \(bu 2
+links global modules listed in \fBdebian/nodejs/extlinks\fP
+.IP \(bu 2
+copies global modules listed in \fBdebian/nodejs/extcopies\fP
+
+.RE
+.IP \(bu 2
+\fBdh_auto_build\fR, Remember to add a \fBdh_auto_build \-\-buildsystem=nodejs\fP
+.br
+in \fBoverride_dh_auto_build\fR section if your \fBdebian/rules\fP file has such
+.br
+section, else this step will be ignored\. Builds:
+.RS 1
+.IP \(bu 2
+components by launching \fBsh \-ex debian/nodejs/<component\-name>/build\fP in
+.br
+this file exists
+.IP \(bu 2
+main module by launching \fBsh \-ex debian/nodejs/build\fP if exists
+
+.RE
+.IP \(bu 2
+\fBdh_auto_test\fR, tests:
+.RS 1
+.IP \(bu 2
+components by launching \fBsh \-ex debian/nodejs/<component\-name>/test\fP if
+.br
+this file exists
+.IP \(bu 2
+main module by launching \fBsh \-ex debian/tests/pkg\-js/test\fP if this file
+.br
+exists\. This test is also used by pkg\-js\-autopkgtest(7) during autopkgtest\.
+.br
+If you want to have a different test during build, set this test in
+.br
+\fBdebian/nodejs/test\fP\|\.
+
+.RE
+.IP \(bu 2
+\fBdh_auto_install\fR: installs modules in the good directories and provides
+.br
+some debhelper variables to be used in \fBdebian/control\fP\|\. Note that if your
+.br
+package provides more that one binary package, you have to use some
+.br
+\fBdebian/<package\-name>\.install\fP files to distribute the files\.
+.br
+Steps:
+.RS 1
+.IP \(bu 2
+\fBcomponents\fR: determine files to install using the same algorithm than
+.br
+main module
+.br
+and install them:
+.RS 1
+.IP \(bu 2
+nowhere if component if \fBdebian/nodejs/submodules\fP exists and component
+.br
+isn't listed in it \fI(an empty \fBdebian/nodejs/submodules\fP drops all
+.br
+components)\fR
+.IP \(bu 2
+nowhere if component is listed in \fBdebian/nodejs/additional_components\fP
+.br
+with a "!" prefix
+.IP \(bu 2
+in main nodejs directories if component is listed in
+.br
+\fBdebian/nodejs/root_modules\fP
+.IP \(bu 2
+else: in a \fBnode_modules\fP subdirectory of main module
+
+.RE
+.IP \(bu 2
+\fBmain module\fR, determine files to install \fI(see below)\fR and install them
+.br
+in the "good" directory:
+.RS 1
+.IP \(bu 2
+if "architecture" is "all": \fB/usr/share/nodejs\fP
+.IP \(bu 2
+else: \fB/usr/lib/${DEB_HOST_MULTIARCH}/nodejs\fP
+
+.RE
+.IP \(bu 2
+\fBlinks\fR: builds symlinks listed in \fBdebian/nodejs/links\fP\|\. Same usage
+.br
+as \fBdebian/links\fP except that source or destination not starting with \fB/\fP
+.br
+are related to arch path
+.br
+\fI(\fB/usr/share/nodejs\fP or \fB/usr/lib/<gnu\-arch>/nodejs\fP)\fR
+.IP \(bu 2
+\fBBuild \fBpkgjs\-lock\.json\fP\fR files: if package "maybe a bundle"
+.br
+\fI(built with webpack, browserify,\.\.\.)\fR, pkg\-js\-tools builds a
+.br
+\fBpkgjs\-lock\.json\fP for each module\. This files may help in Debian
+.br
+transitions
+.IP \(bu 2
+Variables usable in \fBdebian/control\fP:
+.RS 1
+.IP \(bu 2
+\fB${nodejs:Version}\fP: the version of nodejs used during build
+.IP \(bu 2
+\fB${nodejs:Provides}\fP: virtual names to be added into "Provides:" field\.
+.br
+This lists all modules installed in nodejs root directories
+.IP \(bu 2
+\fB${nodeFoo:Provides}\fP: for a source package that provides several binary
+.br
+packages, \fBdh\-sequence\-nodejs\fR filters \fB${nodejs:Provides}\fP for each
+.br
+binary package\. The package name is converted into its camelcase name:
+.br
+\fBnode\-jest\-worker\fR becomes nodeJestWorker
+.IP \(bu 2
+\fB${nodejs:BuiltUsing}\fP: when package "maybe a bundle", lists packages
+.br
+and versions used to build package\. Use it in
+.br
+\fBXB\-Javascript\-Built\-Using\fR field
+
+.RE
+
+.RE
+.IP \(bu 2
+\fBdh_installdocs\fR: \fIdh\-sequence\-nodejs\fR provides a tool named
+.br
+\fBdh_nodejs_autodocs\fR which can be used in a \fBoverride_dh_installdocs\fP
+.br
+to automatically generate documentation for each component\. See related
+.br
+manpage
+.IP \(bu 2
+\fBdh_install\fR: \fIdh\-sequence\-nodejs\fR provides a tool named
+.br
+\fBdh_nodejs_build_debug_package\fR which can be used to build a separate
+.br
+debug package with sourcemap files when package size is too big\. See related
+.br
+manpage
+
+.RE
+.SS Automatically detect some additional components
+.P
+Starting from 0\.12\.0, dh\-sequence\-nodejs automatically reads lerna\.conf and
+.br
+reads "packages" field to find additional components\.
+.P
+Starting from 0\.12\.7, it does the same when package\.json has a "workspaces"
+.br
+field\.
+.P
+This auto\-detection automatically drops "test" and "tests" directories\. You
+.br
+can override this behavior using \fBdebian/additional_components\fR\|\.
+.P
+If a component should not be considered, insert its name preceded by a "!" in
+.br
+\fBdebian/nodejs/additional_components\fR\|\.
+.P
+To disable this feature, use \fBdh\-sequence\-nodejs\-no\-lerna\fR\|\.
+.SS Algorithm to determine files to install
+.P
+\fBpkg\-js\-tools\fR tries to reproduce \fBnpm(1)\fR behavior: it reads \fBpackage\.json\fP
+.br
+and/or \fB\|\.npmignore\fP files to determine files to install except that it drops
+.br
+licenses, *\|\.md, doc*, example*, test*, makefiles,\.\.\.`\.
+.P
+This behavior is overridden if:
+
+.RS 1
+.IP \(bu 2
+\fBdebian/nodejs/install\fP \fI(or \fBdebian/nodejs/<component\-name>/install\fP)\fR
+.br
+exists\. This file uses the same format than \fBdebian/install\fP\|\.
+.IP \(bu 2
+\fBdebian/nodejs/files\fP \fI(or \fBdebian/nodejs/<component\-name>/files\fP)\fR exists\.
+.br
+the content of this file replaces "files" entry of \fBpackage\.json\fP
+
+.RE
+.SS pkg\-js\-tools files
+
+.RS 1
+.IP \(bu 2
+all steps:
+.RS 1
+.IP \(bu 2
+\fBdebian/nodejs/additional_components\fR is used to set some
+.br
+subdirectories that should be considered as components even if they
+.br
+are not listed in \fBdebian/watch\fP\|\. Content example: \fBpackages/*\fP\|\.
+.br
+\fBImportant note\fR: in this example, component name is \fBpackages/foo\fP in
+.br
+every other files, including paths
+.IP \(bu 2
+\fBdebian/nodejs/main\fR is used to indicates where is the main module\.
+.br
+In a package containing only components \fI(bundle package)\fR, you should
+.br
+choose one of them as main component
+
+.RE
+.IP \(bu 2
+configure step:
+.RS 1
+.IP \(bu 2
+\fBdebian/build_modules\fR additional modules needed to build, will be
+.br
+linked in \fBnode_modules\fP directory
+.IP \(bu 2
+\fBdebian/nodejs/component_links\fR lists needed links between components:
+.br
+links \fB\|\.\./\.\./component\-src\fP in \fBcomponent\-dst/node_modules/component\-src\-name\fP
+.IP \(bu 2
+\fBdebian/nodejs/<component\-name>/nolink\fR avoids \fBnode_modules\fP links
+.br
+creation for this component \fI(configuration step)\fR
+.IP \(bu 2
+\fBdebian/nodejs/extlinks\fR lists installed node modules that should be
+.br
+linked into \fBnode_modules\fP directory \fI(modules are searched using nodejs
+.br
+algorithm)\fR\|\. You can mark them with "test" to avoid errors when build
+.br
+profile contains \fBnocheck\fP
+.IP \(bu 2
+\fBdebian/nodejs/extcopies\fR lists installed node modules that should be
+.br
+copied into \fBnode_modules\fP directory\. You can also mark them with "test"
+.IP \(bu 2
+\fBdebian/nodejs/<component>/extlinks\fR lists installed node modules that
+.br
+should be linked in \fB<component>/node_modules\fP directory \fI(\fBtest\fP flag available)\fR
+.IP \(bu 2
+\fBdebian/nodejs/<component>/extcopies\fR lists installed node modules that
+.br
+should be copied in \fB<component>/node_modules\fP directory \fI(\fBtest\fP flag available)\fR
+
+.RE
+.IP \(bu 2
+build step:
+.RS 1
+.IP \(bu 2
+\fBdebian/nodejs/build\fR custom build\. An empty file stops auto build
+.IP \(bu 2
+\fBdebian/nodejs/<component>/build\fR: same for components
+.IP \(bu 2
+\fBdebian/nodejs/build_order\fR orders components build (one component
+.br
+per line)\. Else components are built in alphabetic order except components
+.br
+declared in \fBdebian/nodejs/component_links\fR: a component that depends
+.br
+on another is built after
+
+.RE
+.IP \(bu 2
+test step:
+.RS 1
+.IP \(bu 2
+\fBdebian/tests/test_modules/\fR: additional modules needed for running tests can be
+.br
+added to this directory as subdirectories, which will be linked in \fBnode_modules\fP
+.br
+directory during test step only
+.IP \(bu 2
+\fBdebian/tests/pkg\-js/test\fR: script to launch during test
+.br
+\fI(launched with \fBset \-e\fP)\fR
+.IP \(bu 2
+\fBdebian/tests/pkg\-js/files\fR: lists other files than
+.br
+\fBdebian/tests/test\\_modules/\\*\fP and installed files needed for autopkgtest
+.br
+\fI(default: \fBtest*\fP)\fR
+.IP \(bu 2
+\fBdebian/nodejs/test\fR: overwrite \fBdebian/tests/pkg\-js/test\fP during
+.br
+build if test differs in build and autopkgtest
+.IP \(bu 2
+\fBdebian/nodejs/<component\-name>/test\fR: same for components
+.br
+(launched during build only)
+.IP \(bu 2
+\fBautopkgtest files\fR:
+.RS 1
+.IP \(bu 2
+\fBdebian/tests/autopkgtest\-pkg\-nodejs\.conf\fR: autodep8 configuration file
+.br
+which can be used to add packages or restrictions during autopkgtest only
+.RS 1
+.IP \(bu 2
+\fBextra_depends=p1, p2, p3\fP permits one to add p1, p2 and p3 packages
+.IP \(bu 2
+\fBextra\-restrictions=needs\-internet\fP permits one to add additional restrictions
+.br
+during autopkgtest
+
+.RE
+.IP \(bu 2
+\fBdebian/tests/pkg\-js/require\-name\fR: contains the name to use in
+.br
+autopkgtest \fBrequire\fP test instead of package\.json value
+
+.RE
+
+.RE
+.IP \(bu 2
+install step:
+.RS 1
+.IP \(bu 2
+\fBdebian/nodejs/submodules\fR lists components to install \fI(all if missing)\fR
+.IP \(bu 2
+\fBdebian/nodejs/root_modules\fR lists components to install in nodejs root
+.br
+directory \fI(instead of \fBnode_modules\fP subdirectory)\fR\|\. If this file
+.br
+contains \fB*\fP, all components are installed in root directory
+.IP \(bu 2
+\fBdebian/nodejs/files\fR overwrites \fBpackage\.json#files\fP field\.
+.IP \(bu 2
+\fBdebian/nodejs/<component\-name>/files\fR overwrites \fBpackage\.json#files\fP
+.br
+field\. An empty file avoid any install
+.IP \(bu 2
+\fBdebian/nodejs/name\fR overwrites \fBpackage\.json#name\fP field\.
+.IP \(bu 2
+\fBdebian/nodejs/<component\-name>/name\fR overwrites \fBpackage\.json#name\fP
+.IP \(bu 2
+\fBdebian/nodejs/install\fR overwrites \fBdebian/nodejs/files\fR: same usage as
+.br
+debian/install except that destination not starting with \fB/\fP are related to
+.br
+arch path \fI(\fB/usr/share/nodejs\fP or \fB/usr/lib/<gnu\-arch>/nodejs\fP)\fR
+.IP \(bu 2
+\fBdebian/nodejs/<component\-name>/install\fR same as \fBdebian/nodejs/install\fR
+.br
+for components
+
+.RE
+.IP \(bu 2
+link step:
+.RS 1
+.IP \(bu 2
+\fBdebian/nodejs/links\fR: same usage as debian/links except that source or
+.br
+destination not starting with \fB/\fP are related to arch path
+.br
+\fI(\fB/usr/share/nodejs\fP or \fB/usr/lib/<gnu\-arch>/nodejs\fP)\fR
+
+.RE
+
+.RE
+.TS
+tab(|) nowarn;
+cx.
+T{
+.P
+To install a component in another directory, set its files in
+.br
+\fBdebian/install\fR\|\.
+
+T}
+.TE
+.P
+Example:
+
+.RS 1
+.IP \(bu 2
+debian/control
+
+.RE
+.RS 2
+.nf
+\|\.\.\.
+Testsuite: autopkgtest\-pkg\-nodejs
+Build\-Depends: dh\-sequence\-nodejs
+\|\.\.\.
+.fi
+.RE
+
+.RS 1
+.IP \(bu 2
+debian/tests/pkg\-js/test
+
+.RE
+.RS 2
+.nf
+mocha \-R spec
+.fi
+.RE
+.P
+See also 
+.UR ../autopkgtest/README.md
+.I pkg-js-autopkgtest README
+.UE .
+.SS Multiple binary packages
+.P
+When \fBdebian/control\fP provides more than one binary package, \fBdh_auto_install\fP
+.br
+populates a \fBdebian/tmp\fP and \fBdh_install\fP install files in each package\. In
+.br
+this case, you must write a \fBdebian/<package>\.install\fP for each binary
+.br
+package\. Each line with only one argument is related to \fBdebian/tmp\fP\|\.
+.br
+Examples:
+
+.RS 1
+.IP \(bu 2
+debian/node\-arch\-indep\.install: pick files from \fBdebian/tmp\fP
+.br
+\fBusr/share/nodejs/foo/\fP
+.IP \(bu 2
+debian/node\-arch\-dep\.install: pick files from \fBdebian/tmp\fP
+.br
+\fBusr/lib/*/nodejs/foo/\fP
+.IP \(bu 2
+debian/libjs\.install: pick files from sources
+.br
+\fBdist/* usr/share/javascript/foo/\fP
+
+.RE
+.SS Links
+.P
+Since path is not fixed for arch\-dependent package, you must write
+.br
+\fBdebian/nodejs/links\fP:
+.RS 2
+.nf
+# debian/nodejs/links
+foo/bin/cli\.js  /usr/bin/foo
+.fi
+.RE
+.P
+With a arch independent package, pkg\-js\-tools transforms this into:
+.RS 2
+.nf
+/usr/share/nodejs/foo/bin/cli\.js    /usr/bin/foo
+.fi
+.RE
+.P
+and for a arch dependent package, it uses \fBDEB_GNU_ARCH\fP\|\. Example with amd64:
+.RS 2
+.nf
+/usr/lib/x86_64\-linux\-gnu/foo/bin/cli\.js  /usr/bin/foo
+.fi
+.RE
+.P
+All fields that does not start with \fB/\fP are prefixed with the good nodejs path
+.SS Component docs
+.P
+Starting from version 0\.13\.0, \fBpkg\-js\-tools\fR provides \fBdh_nodejs_autodocs\fR\|\.
+.br
+This tool automatically install README\.md, CONTRIBUTING\.md,\.\.\. for each
+.br
+root component in its \fB/usr/share/doc/node\-<name>\fP directory\. And if no
+.br
+\fBdebian/*docs\fP is found, it does the same for the main component\. To use it:
+.RS 2
+.nf
+override_dh_installdocs:
+ dh_installdocs
+ dh_nodejs_autodocs
+.fi
+.RE
+.SS \|\.eslint* files
+.P
+pkg\-js\-tools auto installer always removes \fB\|\.eslint*\fP files unless it
+.br
+is explicitly specified in \fBdebian/nodejs/**/files\fP or
+.br
+\fBdebian/nodejs/**/install\fP\|\.
+.SS Having different test between build and autopkgtest
+.P
+When \fBdebian/nodejs/test\fP exists, this file is used during build test instead
+.br
+of \fBdebian/tests/pkg\-js/test\fP\|\. This permits one to have a different test\. You can
+.br
+also overwrite \fBdh_auto_test\fP step in \fBdebian/rules\fP:
+.RS 2
+.nf
+override_dh_auto_test:
+      # No test during build (test needs Internet)
+.fi
+.RE
+.SS Autopkgtest additional test packages or test restrictions
+.P
+autodep8 allows one to add additional packages during autopkgtest (and/or
+.br
+additional restrictions) by using a debian/tests/autopkgtest\-pkg\-nodejs\.conf
+.br
+file:
+.RS 2
+.nf
+extra_depends=mocha, npm
+extra\-restrictions=needs\-internet
+.fi
+.RE
+.SH LINTIAN PROFILES
+.P
+pkg\-js\-tools provides a lintian profile:
+
+.RS 1
+.IP \(bu 2
+pkg\-js\-extra: launches additional checks \fI(repo consistency see
+.br
+debcheck\-node\-repo below)\fR
+
+.RE
+.P
+To use them:
+.RS 2
+.nf
+lintian \-\-profile pkg\-js\-extra \.\./node\-foo_1\.2\.3\-1\.changes
+.fi
+.RE
+.SH OTHER TOOLS
+.P
+See related manpages\.
+
+.RS 1
+.IP \(bu 2
+\fBadd\-node\-component\fR: automatically modifies gbp\.conf and debian/watch to add
+.br
+a node component\. See
+.br
+.UR https://wiki.debian.org/Javascript/GroupSourcesTutorial
+.I JS Group Sources Tutorial
+.UE .
+
+.br
+It can also list components or modules (real names)
+.IP \(bu 2
+\fBgetFromNpmCache\fR: export npm cache content to standard output
+.IP \(bu 2
+\fBgithub\-debian\-upstream\fR: launches it in source repo to create a
+.br
+debian/upstream/metadata \fI(works only if upstream repo is on GitHub)\fR
+.IP \(bu 2
+\fBnodepath\fR: shows the path of a node module (npm name)\. You can use \fB\-p\fP to
+.br
+show also the Debian package\. Option \fB\-o\fP shows only Debian package name\.
+.IP \(bu 2
+\fBdebcheck\-node\-repo\fR: checks repo consistency: compares vcs repo registered
+.br
+in npm registry with the source repo declared in debian/watch"
+.IP \(bu 2
+\fBdh_nodejs_autodocs\fR: automatically select and install documentation files
+.br
+toinstall for each component
+.IP \(bu 2
+\fBdh_nodejs_build_debug_package\fR: move sourcemap files from binary
+.br
+packages to a separated debug package
+.IP \(bu 2
+\fBmjs2cjs\fR: build commonjs file using rollup
+.IP \(bu 2
+\fBpkgjs\-audit\fR: creates a temporary \fBpackage\-lock\.json\fP file using Debian
+.br
+package values used by the module to analyze, and launch a \fBnpm audit\fP\|\. If
+.br
+module is a bundle \fI(and then has a \fBpkgjs\-lock\.json\fP)\fR, pkgjs\-audit uses
+.br
+\fBpkgjs\-lock\.json\fP, else it generates its package\-lock\.json using available
+.br
+values
+.IP \(bu 2
+\fBpkgjs\-depends\fR: search recursively dependencies of the given module name
+.br
+(if not given, use current package\.json) and displays related Debian packages
+.br
+and missing dependencies
+.IP \(bu 2
+\fBpkgjs\-install\fR: same as \fBnpm install\fP but uses Debian JS modules when
+.br
+available
+.IP \(bu 2
+\fBpkgjs\-install\-minimal\fR: same as pkgjs\-install but uses only available
+.br
+Debian modules\. It is included in dh\-nodejs so can be used during build
+.IP \(bu 2
+\fBpkgjs\-ls\fR: same as \fBnpm ls\fP but it search also in global nodejs paths
+.IP \(bu 2
+\fBpkgjs\-run\fR: same as \fBnpm run\fP
+.IP \(bu 2
+\fBpkgjs\-lerna run\fR: same as \fBlerna run\fP \fI(only run command is implemented)\fR
+.IP \(bu 2
+\fBpkgjs\-utils\fR, \fBpkgjs\-ln\fR, \fBpkgjs\-main\fR, \fBpkgjs\-pjson\fR: various
+.br
+utilities\. See \fBpkgjs\-utils(1)\fP manpage\.
+
+.RE
+.SH SEE ALSO
+.P
+debhelper(7), pkg\-js\-autopkgtest(7), uscan(1), add\-node\-component(1),
+.br
+github\-debian\-upstream(1), nodepath(1), mjs2cjs(1), pkgjs\-ls(1),
+.br
+pkgjs\-depends(1), pkgjs\-audit(1), pkgjs\-utils(1), pkgjs\-install(1)
+.SH FEATURES HISTORY
+.TS
+tab(|) expand nowarn box;
+l l.
+T{
+TOOL
+T}|T{
+Minimal version
+T}
+=
+T{
+add\-node\-component
+T}|T{
+0\.8\.14
+T}
+_
+T{
+add\-node\-component \-\-cmp\-tree
+T}|T{
+0\.9\.22
+T}
+_
+T{
+debcheck\-node\-repo
+T}|T{
+0\.8\.14
+T}
+_
+T{
+dh_nodejs_autodocs
+T}|T{
+0\.13\.0
+T}
+_
+T{
+dh_nodejs_autodocs auto_dispatch
+T}|T{
+0\.14\.5
+T}
+_
+T{
+dh_nodejs_build_debug_package
+T}|T{
+0\.15\.5
+T}
+_
+T{
+dh_nodejs_substvars
+T}|T{
+0\.14\.5
+T}
+_
+T{
+dh\-make\-node
+T}|T{
+0\.9\.18
+T}
+_
+T{
+getFromNpmCache
+T}|T{
+0\.14\.32
+T}
+_
+T{
+mjs2cjs
+T}|T{
+0\.12\.3
+T}
+_
+T{
+mjs2cjs \-a
+T}|T{
+0\.14\.14
+T}
+_
+T{
+pkgjs\-audit
+T}|T{
+0\.11\.2
+T}
+_
+T{
+pkgjs\-depends
+T}|T{
+0\.9\.54
+T}
+_
+T{
+pkgjs\-depends \-\-graph
+T}|T{
+0\.14\.34
+T}
+_
+T{
+pkgjs\-install
+T}|T{
+0\.14\.20
+T}
+_
+T{
+pkgjs\-install\-minimal
+T}|T{
+0\.14\.27
+T}
+_
+T{
+pkgjs\-ln
+T}|T{
+0\.9\.76
+T}
+_
+T{
+pkgjs\-lerna
+T}|T{
+0\.15\.13
+T}
+_
+T{
+pkgjs\-ls
+T}|T{
+0\.9\.30
+T}
+_
+T{
+pkgjs\-main
+T}|T{
+0\.9\.76
+T}
+_
+T{
+pkgjs\-pjson
+T}|T{
+0\.9\.76
+T}
+_
+T{
+pkgjs\-run
+T}|T{
+0\.14\.22
+T}
+_
+T{
+pkgjs\-utils
+T}|T{
+0\.9\.75
+T}
+.TE
+.TS
+tab(|) expand nowarn box;
+l l.
+T{
+FEATURE
+T}|T{
+Minimal version
+T}
+=
+T{
+additional_components
+T}|T{
+0\.9\.11
+T}
+_
+T{
+auto build (grunt)
+T}|T{
+0\.9\.3
+T}
+_
+T{
+autopkgtest skip
+T}|T{
+0\.9\.30
+T}
+_
+T{
+auto\-install (arch\-dep)
+T}|T{
+0\.9\.27
+T}
+_
+T{
+build order
+T}|T{
+0\.9\.10
+T}
+_
+T{
+dh\-sequence\-nodejs
+T}|T{
+0\.9\.41
+T}
+_
+T{
+follow lerna\.json#useWorkspaces
+T}|T{
+0\.14\.8
+T}
+_
+T{
+\|\.npmignore support
+T}|T{
+0\.9\.53
+T}
+_
+T{
+support lerna\.conf
+T}|T{
+0\.12\.0
+T}
+_
+T{
+support workspaces
+T}|T{
+0\.12\.7
+T}
+_
+T{
+debian/nodejs/main
+T}|T{
+0\.9\.11
+T}
+_
+T{
+debian/tests/test_modules
+T}|T{
+0\.9\.33
+T}
+_
+T{
+debian/build_modules
+T}|T{
+0\.9\.33
+T}
+_
+T{
+${nodejs:BuiltUsing}
+T}|T{
+0\.11\.8
+T}
+_
+T{
+${nodejs:Provides}
+T}|T{
+0\.9\.10
+T}
+_
+T{
+${nodejs:Version}
+T}|T{
+0\.9\.38
+T}
+_
+T{
+${nodeFoo:Provides}
+T}|T{
+0\.14\.5
+T}
+_
+T{
+ordered_components_list
+T}|T{
+0\.15\.13
+T}
+_
+T{
+packages_list
+T}|T{
+0\.15\.13
+T}
+.TE
+.SH COPYRIGHT AND LICENSE
+.P
+Copyright Yadd <yadd@debian.org>
+.P
+This library is free software; you can redistribute it and/or modify
+.br
+it under the terms of the GNU General Public License as published by
+.br
+the Free Software Foundation; either version 2, or (at your option)
+.br
+any later version\.
+.P
+This program is distributed in the hope that it will be useful,
+.br
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+.br
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE\.  See the
+.br
+GNU General Public License for more details\.
+.P
+On Debian systems, the complete text of version 2 of the GNU General
+.br
+Public License can be found in `/usr/share/common\-licenses/GPL\-2'\.
+.br
+If not, see 
+.UR http://www.gnu.org/licenses/
+.I GNU licenses
+.UE ;
+

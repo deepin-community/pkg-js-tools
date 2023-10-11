@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Debian::Debhelper::Dh_Lib;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+use File::Find;
+
+my $DEBUGFILES = $ARGV[1] ? qr/$ARGV[1]/ : qr/^(?:.*\.map)$/;
+
+init();
+
+my $debugPackage = $ARGV[0] or die "Debug package name is missing";
+my @pkgs         = grep { /\w/ } getpackages();
+
+foreach my $pkg (@pkgs) {
+    next if $pkg eq $debugPackage;
+    my @filesToMove;
+    find(
+        sub {
+            return if -d $_;
+            if ( $_ =~ $DEBUGFILES ) {
+                push @filesToMove, [ $File::Find::name, $File::Find::dir ];
+            }
+        },
+        "debian/$pkg"
+    );
+    foreach (@filesToMove) {
+        my ( $src, $srcDir ) = @$_;
+        my ( $dst, $dstDir ) =
+          map { s#^debian/$pkg/#debian/$debugPackage/#; $_ } @$_;
+        doit( qw(mkdir -p), $dstDir ) unless -e $dstDir;
+        rename $src, $dst;
+        rmdir $srcDir;
+    }
+}
+__END__
+=pod
+
+=head1 NAME
+
+dh_nodejs_build_debug_package - automatically move sourcemap files into
+a separate debug package.
+
+=head1 SYNOPSIS
+
+  override_dh_install:
+      dh_install
+      dh_nodejs_build_debug_package node-foo-debug
+
+With custom regex (example to move typescript declarations):
+
+  override_dh_install:
+      dh_install
+      dh_nodejs_build_debug_package node-types-foo '^.*\.d\.ts$'
+
+=head1 DESCRIPTION
+
+dh_nodejs_build_debug_package automatically move sourcemap files from
+all packages into a separate debug package.
+To be used when package size is too big.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright Yadd E<lt>yadd@debian.orgE<gt>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+
+=cut

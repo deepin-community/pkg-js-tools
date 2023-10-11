@@ -1,0 +1,209 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Debian::Debhelper::Dh_Lib;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+use File::Basename;
+
+my $DOCFILES =
+qr/^(?:(?:co(?:de_of_conduct|ntributing)|maintaining|security)\.md|readme(?:.*\.(?:m(?:arkdown|d)|txt))?|authors?(?:\.(?:txt|md))?|notice(?:\.txt)?)$/i;
+
+my $CHANGELOGS = qr/^(?:change(?:log(?:\.md)?|s(?:\.md)?)|history(?:\.md)?)$/i;
+
+my $autoDispatch;
+
+init();
+
+exit 0 if $ENV{DEB_BUILD_OPTIONS} and $ENV{DEB_BUILD_OPTIONS} =~ /\bnodoc\b/;
+
+my $components = root_components_list() // {};
+my ( $main, $docFiles );
+{
+    opendir my $dir, 'debian';
+    unless ( -e 'debian/docs'
+        or grep { /(?:^|\.)docs$/ } readdir $dir )
+    {
+        $main = pjson( main_package() )->{name};
+    }
+    closedir $dir;
+}
+
+if ( -e 'debian/nodejs/docs' ) {
+    $docFiles = getDocFiles('debian/nodejs/docs');
+}
+else {
+    $docFiles = getDocFiles();
+}
+install_doc_files($docFiles);
+
+sub getDocFiles {
+    my ($fixedList) = @_;
+    my $res;
+    if ($fixedList) {
+        my @pList = open_file($fixedList);
+        foreach my $pattern (@pList) {
+            my @list = glob($pattern);
+          D: foreach my $docFile (@list) {
+                foreach my $cmp ( keys %$components ) {
+                    $cmp =~ s#/+$##;
+                    if ( $docFile =~ m#^\Q$cmp\E/# ) {
+                        push @{ $res->{ $components->{$cmp} } }, $docFile;
+                        last D;
+                    }
+                }
+                push @{ $res->{$main} }, $docFile if $main;
+            }
+        }
+    }
+    else {
+        $components->{ main_package() } = $main if $main;
+        my %cmps = %$components;
+        foreach my $cmp ( keys %cmps ) {
+            $cmp =~ s#/+$##;
+            my $dir;
+            opendir( $dir, $cmp ) or next;
+            my @changelogs;
+            push @{ $res->{$cmp} }, map { "$cmp/$_" } grep {
+                push @changelogs, $_
+                  if $_ =~ $CHANGELOGS;
+                $_ =~ $DOCFILES
+            } readdir $dir;
+            if ( ( !$main or $cmp ne $main ) and @changelogs ) {
+                push @{ $res->{$cmp} }, map { "$cmp/$_ changelog" } @changelogs;
+            }
+        }
+    }
+    return $res;
+}
+
+sub install_doc_files {
+    my ($tree) = @_;
+    my $pkg = $ARGV[0];
+    if ( $pkg and $pkg eq 'auto_dispatch' ) {
+        $pkg          = undef;
+        $autoDispatch = 1;
+    }
+    my @pkgs = grep { /\w/ } getpackages();
+    unless ( $pkg or $autoDispatch ) {
+        if ( @pkgs != 1 ) {
+            @pkgs = grep { /^node-/ } @pkgs;
+            if ( @pkgs != 1 ) {
+                die "Set package as argument of $0";
+            }
+        }
+        @pkgs = ( $pkgs[0] );
+    }
+    foreach my $pkg (@pkgs) {
+        my $tmp = "debian/$pkg/usr/share/doc/";
+        doit( qw(mkdir -p), $tmp ) unless -e $tmp;
+        foreach my $cmp ( keys %$tree ) {
+            next unless $cmp      and $components->{$cmp};
+            next if $autoDispatch and !isInPkg( $pkg, $components->{$cmp} );
+            my @docFiles = @{ $tree->{$cmp} };
+            my $vpkg = 'node-' . normalize_name( $components->{$cmp} || $main );
+            doit( 'mkdir', "$tmp/$vpkg" ) unless -e "$tmp/$vpkg";
+            foreach my $doc (@docFiles) {
+                my $dst;
+                ( $doc, $dst ) = split( /\s+/, $doc ) if $doc =~ /\s+/;
+                if ( -d $doc ) {
+                    print_and_doit( qw(cp -a --reflink=auto),
+                        $doc, "$tmp/$vpkg/" )
+                      unless -e "$tmp/$vpkg/" . basename($doc);
+                }
+                elsif ($dst) {
+                    print_and_doit( qw(install -m 644),
+                        $doc, "$tmp/$vpkg/$dst" )
+                      unless -e "$tmp/$vpkg/$dst";
+                }
+                else {
+                    print_and_doit( qw(install -m 644), $doc, "$tmp/$vpkg/" )
+                      unless -e "$tmp/$vpkg/" . basename($doc);
+                }
+            }
+            if ( $cmp ne main_package and $pkg ne $vpkg ) {
+                print_and_doit( qw(ln -s), "../$pkg/copyright", "$tmp/$vpkg/" )
+                  unless -e "$tmp/$vpkg/copyright";
+            }
+        }
+    }
+}
+
+my @npaths;
+
+sub isInPkg {
+    my ( $pkg, $name ) = @_;
+    unless (@npaths) {
+        my $multiArch = `dpkg-architecture -q DEB_TARGET_MULTIARCH`;
+        chomp $multiArch;
+        @npaths = (
+            'usr/share/nodejs', 'usr/lib/nodejs', "usr/lib/$multiArch/nodejs"
+        );
+    }
+    my $res = 0;
+    foreach (@npaths) {
+        $res = 1
+          if -d "debian/$pkg/$_/$name"
+          or -f "debian/$pkg/$_/$name.js"
+          or -l "debian/$pkg/$_/$name.js";
+    }
+    return $res;
+}
+__END__
+=pod
+
+=head1 NAME
+
+dh_nodejs_autodocs - automatically install components doc files
+
+=head1 SYNOPSIS
+
+  override_dh_installdocs:
+      dh_installdocs
+      dh_nodejs_autodocs
+
+For multiple binary packages:
+
+  override_dh_installdocs:
+      dh_installdocs
+      dh_nodejs_autodocs node-foo
+
+Or best:
+
+  override_dh_installdocs:
+      dh_installdocs
+      dh_nodejs_autodocs auto_dispatch
+
+=head1 DESCRIPTION
+
+dh_nodejs_autodocs automatically install README.md, CONTRIBUTING.md,... for
+each root component in its C</usr/share/doc/node-name> directory.
+
+If no C<debian/*docs> is found, it does the same for the main component.
+
+=head2 Multiple binary package
+
+=over
+
+=item * If no argument is given, dh_nodejs_autodocs installs the whole
+auto-selected documentation in the binary package which name starts with
+"node-".
+If none exists or if there is more than one, it fails.
+
+=item * If dh_nodejs_autodocs is launched with B<auto_dispatch>, it dispatches
+auto-selected doc in related binary packages.
+
+=item * If dh_nodejs_autodocs is launched with a binary package name,
+it installs the whole auto-selected doc in it.
+
+=back
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright Yadd E<lt>yadd@debian.orgE<gt>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+
+=cut

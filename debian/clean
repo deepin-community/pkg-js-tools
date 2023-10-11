@@ -15,3 +15,5 @@ t/submodules/comp-*/comp-*
 t/submodules/comp-one/a
 t/*/debian/foo.substvars
 t/*/debian/files
+t/*/debian/debhelper-build-stamp
+test/

@@ -33,3 +33,6 @@ yarn\.lock
 readme\.md
 readme\.txt
 readme
+
+# Typescript log
+tsconfig\.tsbuildinfo

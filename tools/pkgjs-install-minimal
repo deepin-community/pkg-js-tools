@@ -1,0 +1,73 @@
+#!/usr/bin/perl
+
+use strict;
+use Dpkg::IPC;
+use Debian::PkgJs::Dependencies;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+use Getopt::Long;
+use JSON;
+
+my %opt;
+
+GetOptions(
+    \%opt, qw(
+      h|help
+      v|version
+      copy
+      prod|production
+    )
+);
+
+if ( $opt{h} ) {
+    print <<EOF;
+Link or copy all available dependencies of a JS project using Debian dependencies.
+
+Options:
+ -h, --help: print this
+ --copy: copy modules instead of link them
+ --prod: don't install dev dependencies
+EOF
+    exit;
+}
+elsif ( $opt{v} ) {
+    print "$VERSION\n";
+    exit;
+}
+
+# Step 0: generate package-lock.json if needed
+
+scanAndInstall( '.', 'dependencies', 'peerDependencies',
+    ( !$opt{prod} ? 'devDependencies' : () ) );
+
+sub scanAndInstall {
+    my ( $path, @fields ) = @_;
+    @fields = ( 'dependencies', 'peerDependencies' ) unless @fields;
+    my @deps;
+    foreach (@fields) {
+        my $tmp;
+        if ( ( $tmp = pjson($path)->{$_} ) and ref $tmp ) {
+            push @deps, keys %$tmp;
+        }
+    }
+    mkdir 'node_modules';
+    foreach my $mod (@deps) {
+        next if -e "node_modules/$mod";
+        next unless installedModules->{$mod};
+        if ( $mod =~ m#(.*)/# ) {
+            mkdir "node_modules/$1";
+        }
+
+        if ( $opt{copy} ) {
+            spawn(
+                exec =>
+                  [ 'cp', '-a', installedModules->{$mod}, "node_modules/$mod" ],
+                wait_child => 1,
+            );
+            scanAndInstall("node_modules/$mod");
+        }
+        else {
+            symlink installedModules->{$mod}, "node_modules/$mod";
+        }
+    }
+}

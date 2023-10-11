@@ -17,13 +17,13 @@ open my $f, 'order' or die $!;
 my $content = join '', <$f>;
 close $f;
 ok(
-    $content eq 'two
+    $content eq 'three
 one
-three
+two
 ', 'Order successful'
 ) or diag "Get: $content";
 unlink 'order';
 
 spawn( exec => [ 'dh_auto_clean', '--buildsystem=nodejs' ], wait_child => 1 );
-spawn( exec => ['dh_clean'], wait_child => 1 );
+spawn( exec => ['dh_clean'],                                wait_child => 1 );
 chdir $pwd;

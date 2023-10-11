@@ -1,6 +1,7 @@
 \..*
 docs?
 examples?
+tap-snapshots
 tests?
 node_modules
 bench

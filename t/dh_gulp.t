@@ -22,7 +22,7 @@ SKIP: {
         ok( -f $_, "build creates $_" );
     }
     spawn(
-        exec       => [ 'dh_auto_install', '--buildsystem=nodejs' ],
+        exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
         wait_child => 1
     );
     foreach (

@@ -37,13 +37,11 @@ sub uscanResult {
             $data{$_} = $1;
         }
         else {
-            print STDERR
-              "Field $_ not found in uscan result, please investigate.\n\n"
-              . "DEHS output:\n$out\n\n"
-              . "Uscan stderr:\n$err\n\n";
+            print STDERR "Uscan failed\n";
+            return;
         }
     }
-    $data{'upstream-version'} =~ s/\+.*$//;
+    $data{'upstream-version'} =~ s/\+.*$// if $data{'upstream-version'};
     return ( $data{'upstream-version'}, $data{'upstream-url'} );
 }
 
@@ -92,7 +90,7 @@ sub git_watch {
     my ( $repo, $component, $type, $version, $after, $noctype ) = @_;
     $version   = $version   ? "v?($version(?:\.[\\d\\.]+)?)" : "v?([\\d\\.]+)";
     $component = $component ? "component=$component,\\\n"    : '',
-      $type    = $type      ? " $type"                       : '';
+      $type = $type ? " $type" : '';
     $component .= "ctype=nodejs,\\\n" unless ($noctype);
     my $name = $repo;
     $name =~ s#.*/([^/]+)/?#$1#;
@@ -113,7 +111,7 @@ EOF
 
 sub registry_watch {
     my ( $pname, $component, $type, $version, $noctype ) = @_;
-    my $localName = "node-$component";
+    my $localName = $component ? "node-$component" : '@PACKAGE@';
     $version   = $version   ? "($version(?:\.[\\d\\.]+)?)" : "([\\d\\.]+)";
     $component = $component ? ",component=$component"      : '';
     $type      = $type      ? " $type"                     : '';

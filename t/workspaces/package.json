@@ -1,0 +1,6 @@
+{
+ "name":"foo",
+ "version":"0.1",
+ "files": [ "index.js" ],
+ "workspaces": ["packages/*"]
+}

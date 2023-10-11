@@ -1,1 +1,42 @@
+Tests: build
+Depends: build-essential
+ , dpkg-dev
+ , fakeroot
+ , grunt
+ , gulp
+ , node-grunt-contrib-concat
+ , node-gulp-concat
+ , pkg-js-tools
+Restrictions: allow-stderr
+
+Tests: add-node-component
+Depends: @
+ , devscripts
+ , libconfig-inifiles-perl
+ , libfile-copy-recursive-perl
+Restrictions: needs-internet, allow-stderr
+
 Tests: pkg-js-autopkgtest
+Depends: @
+
+Tests: pkgjs-install-minimal
+Depends: dh-nodejs
+ , node-chalk
+ , node-mdn-browser-compat-data
+
+Tests: pkgjs-install, pkgjs-depends, nodepath, pkgjs-ln, mjs2cjs
+Depends: @
+ , apt-file
+ , libdpkg-perl
+ , libcache-cache-perl
+ , libprogress-any-output-termprogressbarcolor-perl
+ , node-abab
+ , node-chalk
+ , node-glob
+ , node-mdn-browser-compat-data
+ , node-rollup-plugin-node-resolve
+ , node-semver
+ , node-slice-ansi (>= 5.0.0+~cs9.0.0-2~)
+ , npm
+ , rollup
+Restrictions: needs-internet, needs-root, allow-stderr

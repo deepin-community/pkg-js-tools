@@ -1,0 +1,60 @@
+#!/usr/bin/perl
+
+use strict;
+use Test::More;
+use Dpkg::IPC;
+
+my $out;
+$ENV{HOME} = $ENV{AUTOPKGTEST_TMP} if $ENV{AUTOPKGTEST_TMP};
+
+my $noCache;
+spawn(
+    exec            => [qw(apt-file update)],
+    nocheck         => 1,
+    wait_child      => 1,
+    error_to_string => \$out,
+);
+if ($?) {
+    $noCache = 1;
+    diag "apt-file update failed";
+}
+spawn(
+    exec       => [qw(pkgjs-depends glob@7.2.0)],
+    nocheck    => 1,
+    wait_child => 1,
+    to_string  => \$out,
+);
+
+if ($?) {
+    fail "pkgjs-depends failed";
+}
+else {
+    diag "RESULT:\n$out";
+    if ($noCache) {
+        ok( $out =~ /# glob\@7.2.0/s, 'It displays title' );
+    }
+    else {
+        ok( $out =~ /# glob\@7.2.0\s+\(node-glob\)/s,
+            'It detects Debian package' );
+    }
+    ok( $out =~ /DEPENDENCIES:\s+node-\S+\s+\(\S+\)/s,
+        "It detects packaged dependencies" );
+    ok( $out !~ /MISSING/s, "It doesn't detect any missing dependency" );
+}
+spawn(
+    exec       => [qw(pkgjs-depends cross-spawn)],
+    nocheck    => 1,
+    wait_child => 1,
+    to_string  => \$out,
+);
+
+if ($?) {
+    fail "pkgjs-depends failed";
+}
+else {
+    diag "RESULT:\n$out";
+    ok( $out =~ /# cross-spawn\@([\d\.\-\w]+)/s, "It displays version ($1)" );
+    ok( $out =~ /cross-spawn.*BANNED/m,
+        'It detects that cross-spawn is banned' );
+}
+done_testing();

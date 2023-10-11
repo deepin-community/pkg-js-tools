@@ -12,3 +12,4 @@ Description: Foo
 Package: libjs-foo
 Architecture: all
 Description: Foo
+ Bar

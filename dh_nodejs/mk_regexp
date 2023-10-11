@@ -1,69 +1,60 @@
 #!/usr/bin/perl -i -p
 
+use strict;
 use Regexp::Assemble;
-our ( $expr, $expr2, $dexpr, $makefiles, $banned );
+our ( $expr, $expr2, $dexpr, $makefiles, $webpacks, $docFiles, $changelogs );
+
+sub open_file {
+    my ($file) = @_;
+    my @res;
+    open F, '<', $file or die $!;
+    while ( my $l = <F> ) {
+        chomp $l;
+        next if ( $l =~ /^\s*#/ );
+        next if $l =~ /^\s*$/;
+        push @res, $l;
+    }
+    return @res;
+}
 
 BEGIN {
     my $re   = Regexp::Assemble->new;
     my $remk = Regexp::Assemble->new;
-    open F, 'dh_nodejs/dh_root_files.excluded' or die $!;
-    while ( my $l = <F> ) {
-        chomp $l;
-        next if ( $l =~ /^\s*#/ );
-        next if $l =~ /^\s*$/;
-        $re->add($l);
+    $re->add($_) foreach ( open_file('dh_nodejs/dh_root_files.excluded') );
+    foreach ( open_file('dh_nodejs/dh_makefiles') ) {
+        $re->add($_);
+        $remk->add($_);
     }
-    close F;
-    open F, 'dh_nodejs/dh_makefiles' or die $!;
-    while ( my $l = <F> ) {
-        chomp $l;
-        next if ( $l =~ /^\s*#/ );
-        next if $l =~ /^\s*$/;
-        $re->add($l);
-        $remk->add($l);
-    }
-    close F;
     $expr      = $re->as_string;
     $makefiles = $remk->as_string;
 
     $re = Regexp::Assemble->new;
-    open F, 'dh_nodejs/dh_files.excluded' or die $!;
-    while ( my $l = <F> ) {
-        chomp $l;
-        next if ( $l =~ /^\s*#/ );
-        next if $l =~ /^\s*$/;
-        $re->add($l);
-    }
-    close F;
+    $re->add($_) foreach ( open_file('dh_nodejs/dh_files.excluded') );
     $expr2 = $re->as_string;
 
     $re = Regexp::Assemble->new;
-    open F, 'dh_nodejs/dh_dirs.excluded' or die $!;
-    while ( my $l = <F> ) {
-        chomp $l;
-        next if ( $l =~ /^\s*#/ );
-        next if $l =~ /^\s*$/;
-        $re->add($l);
-    }
-    close F;
+    $re->add($_) foreach ( open_file('dh_nodejs/dh_dirs.excluded') );
     $dexpr = $re->as_string;
 
     $re = Regexp::Assemble->new;
-    open F, 'dh_nodejs/banned' or die $!;
-    while ( my $l = <F> ) {
-        chomp $l;
-        next if ( $l =~ /^\s*#/ );
-        next if $l =~ /^\s*$/;
-        $re->add($l);
-    }
-    close F;
-    $banned = $re->as_string;
+    $re->add($_) foreach ( open_file('dh_nodejs/dh_webpacks') );
+    $webpacks = $re->as_string;
+
+    $re = Regexp::Assemble->new;
+    $re->add($_) foreach ( open_file('dh_nodejs/dh_docs') );
+    $docFiles = $re->as_string;
+
+    $re = Regexp::Assemble->new;
+    $re->add($_) foreach ( open_file('dh_nodejs/dh_changelogs') );
+    $changelogs = $re->as_string;
 
 }
 $/ = ';';
 
-s#qr.*$#qr'^$banned\$'i;#s         if /our \$BANNED/;
-s#qr.*$#qr/^$expr\$/i;#s           if /my \$rootFilesIgnored/;
-s#qr.*$#qr/^$expr2\$/i;#s          if /my \$filesIgnored/;
-s#qr.*$#qr\{^$dexpr(?:/.*)?$\}i;#s if /my \$dirIgnored/;
+s#qr.*$#qr/^$expr\$/i;#s                 if /my \$rootFilesIgnored/;
+s#qr.*$#qr/^$expr2\$/i;#s                if /my \$filesIgnored/;
+s#qr.*$#qr\{^$dexpr(?:/.*)?$\}i;#s       if /my \$dirIgnored/;
+s#qr.*$#qr/^\.\*\\b$webpacks\\b\.\*/i;#s if /my \$WEBPACKS/;
+s#qr.*$#qr/^$docFiles\$/i;#s             if /my \$DOCFILES/;
+s#qr.*$#qr/^$changelogs\$/i;#s           if /my \$CHANGELOGS/;
 s#(MAKEFILES=').*?('\n)#$1\^$makefiles\$$2#;

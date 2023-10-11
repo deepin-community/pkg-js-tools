@@ -21,21 +21,30 @@ pod2usage(
 
   # $ regexp-assemble <<EOF
   # link_test_modules
+  # link_external_modules
+  # link_internal_modules
   # link_build_modules
   # clean_test_modules
+  # clean_external_modules
+  # clean_internal_modules
   # clean_build_modules
   # ln
   # components_list
   # modules_list
+  # packages_list
+  # root_components_list
+  # root_modules_list
+  # ordered_components_list
   # pjson
   # main
+  # normalize_name
   # -h
   # -v
   # --help
   # --version
   # EOF
   unless $cmd =~
-/^(?:c(?:lean_(?:build|test)_modules|omponents_list)|l(?:ink_(?:build|test)_modules|n)|-(?:[hv]|-(?:version|help))|m(?:odules_list|ain)|pjson)/;
+/^(?:c(?:lean_(?:(?:ex|in)ternal|build|test)_modules|omponents_list)|(?:root_(?:component|module)|ordered_component)s_list|l(?:ink_(?:(?:ex|in)ternal|build|test)_modules|n)|-(?:[hv]|-(?:version|help))|p(?:ackages_list|json)|m(?:odules_list|ain)|normalize_name)$/;
 
 our $obj = bless {}, 'Debian::PkgJs::Utils';
 
@@ -51,12 +60,29 @@ use constant _sub => {
     },
     components_list => sub {
         my $res = $obj->component_list;
-        return join( '', map { "$_\n" } sort keys %$res );
+        return join( "\n", sort keys %$res );
     },
     modules_list => sub {
         my $res = $obj->component_list;
-        return
-          join( '', map { $obj->pjson($_)->{name} . "\n" } sort keys %$res );
+        return join( "\n", sort values %$res );
+    },
+    normalize_name => sub {
+        return $obj->normalize_name(@ARGV);
+    },
+    root_components_list => sub {
+        my $res = $obj->root_components_list;
+        return join( "\n", sort keys %$res );
+    },
+    packages_list => sub {
+        return join( "\n", $obj->packages_list );
+    },
+    root_modules_list => sub {
+        my $res = $obj->root_components_list;
+        return join( "\n", sort values %$res );
+    },
+    ordered_components_list => sub {
+        my @res = $obj->ordered_components_list;
+        return join( "\n", @res );
     },
     pjson => sub {
         my $cmp = shift(@ARGV) || '.';
@@ -97,13 +123,32 @@ use constant _sub => {
     },
     ln => sub {
         my $mod = shift @ARGV;
+        die 'Missing arg' unless $mod;
+        my $displayName = $mod;
+        if ( $mod eq '-t' ) {
+            $mod                          = shift @ARGV;
+            $Debian::PkgJs::Utils::WANTTS = 1;
+            $displayName                  = "(TS) $mod";
+        }
         my $res = $obj->ln($mod);
-        return "'$mod' linked into node_modules" if $res;
-        print STDERR "Unable to link $mod: $!";
+        if ($res) {
+            return $res < 0
+              ? "$displayName exists"
+              : "$displayName linked into node_modules";
+        }
+        print STDERR "Unable to link $mod: $!\n";
         exit 1;
     },
     link_build_modules => sub {
         $obj->link_build_modules;
+        return '';
+    },
+    link_external_modules => sub {
+        $obj->link_external_modules;
+        return '';
+    },
+    link_internal_modules => sub {
+        $obj->link_internal_modules;
         return '';
     },
     link_test_modules => sub {
@@ -112,6 +157,14 @@ use constant _sub => {
     },
     clean_build_modules => sub {
         $obj->clean_build_modules;
+        return '';
+    },
+    clean_external_modules => sub {
+        $obj->clean_external_modules;
+        return '';
+    },
+    clean_internal_modules => sub {
+        $obj->clean_internal_modules;
         return '';
     },
     clean_test_modules => sub {
@@ -123,6 +176,10 @@ use constant _sub => {
 _sub->{'--version'} = _sub->{'-v'};
 _sub->{'--help'}    = _sub->{'-h'};
 
+if ( $cmd =~ /_list$/ ) {
+    $OPTS->{lerna} =
+      !search_bd_in_debian_control(qr/^dh-sequence-nodejs-no-lerna$/);
+}
 my $res = _sub->{$cmd}->();
 chomp $res;
 print $res. ( $res =~ /./ ? "\n" : '' );
@@ -168,11 +225,110 @@ pkgjs-utils - Nodejs package utilities
     # prints: '@types/node' linked into node_modules
   $ pkgjs-ln @types/node
     # same as pkgjs-utils ln @types/node
+  $ pkgjs-utils normalize_name @types/node
+    # prints: types-node
+  $ pkgjs-utils root_components_list (only components installed in nodejs dir)
+  $ pkgjs-utils root_modules_list (same with module names)
+  $ pkgjs-utils ordered_components_list (components in build order)
 
 =head1 DESCRIPTION
 
 Collection of little commands to read <component>/package.json overridden by
 debian/nodejs/<component>/* files.
+
+=head2 Available commands
+
+=over
+
+=item B<link_test_modules>
+
+Link modules that are in the B<debian/tests/test_modules> directory into
+"node_modules".
+
+=item B<link_external_modules>
+
+Link Debian modules listed into B<debian/nodejs/extlinks> into "node_modules"
+and copy modules listed into B<debian/nodejs/extcopies> into "node_modules".
+
+=item B<link_internal_modules>
+
+In multi-modules package I<(with B<uscan> components and/or lerna/workspace)>,
+link these modules into "node_modules", except the "main" module.
+
+=item B<link_build_modules>
+
+Link modules that are in the B<debian/build_modules> directory into
+"node_modules".
+
+=item B<clean_test_modules>
+
+Drop links created by B<link_test_modules>.
+
+=item B<clean_external_modules>
+
+Drop links/copies created by B<link_external_modules>.
+
+=item B<clean_internal_modules>
+
+Drop links created by B<link_internal_modules>.
+
+=item B<clean_build_modules>
+
+Drop links created by B<link_build_modules>.
+
+=item B<ln>
+
+Link the given Debian module into "node_modules".
+
+If "-t" option is set, try to link the corresponding typescript declarations.
+For example:
+
+    $ pkgjs-ln -t glob; pkgjs-ln -t abab
+
+creates "node_modules/@types/glob" and "node_modules/abab".
+
+=item B<components_list>
+
+Print the list of components (directories) without the "main" module.
+
+=item B<modules_list>
+
+Print the NPM names of components without the "main" module.
+
+=item B<pjson>
+
+Reads the package.json I<or package.yaml> of the given directory. If no
+arguments are given, it prints the serialized JSON content. If arguments
+are given, it tries to follow keys. For example:
+
+    $ pkgjs-pjson packages/foo scripts run
+
+write the content of the subkey "run" of the key "scripts".
+
+=item B<main>
+
+Print the NPM name of the "main" module.
+
+=item B<packages_list>
+
+Print the list of binary packages from "debian/control".
+
+=item B<normalize_name>
+
+Convert a NPM module name into a Debian compatible name. Examples:
+
+    $ pkgjs-utils normalize_name @types/glob
+    type-glob
+    $ pkgjs-utils normalize_name @types/babel__type
+    types-babel-type
+    $ pkgjs-utils normalize_name require_optional
+    require-optional
+
+=item B<-h> B<--help>
+
+=item B<-v> B<--version>
+
+=back
 
 =head1 AUTHOR
 
