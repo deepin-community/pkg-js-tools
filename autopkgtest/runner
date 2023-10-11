@@ -2,38 +2,42 @@
 
 set -e
 
+NODE_OPTIONS="--disable-proto=throw"
+
+if [ -e debian/tests/pkg-js/enable_proto ]; then
+	NODE_OPTIONS=""
+fi
+export NODE_OPTIONS
+
 function dolink() {
 	DIR=$1
-	echo "# Searching files to link in $DIR"
 	for f in `ls $DIR/`; do
 		if [ -d $f ]; then
-			echo "# subdir $f already exists:"
 			( cd $f; dolink $DIR/$f )
 		else
-			ln -sv $DIR/$f || echo "### skipping $i"
+			ln -s $DIR/$f 2>/dev/null || true
 		fi
 	done
 }
 
-MAKEFILES='^(?:(?:(?:(?:rollup[\.\-].*|ava\.)config|karma\.conf|.mocharc)\.j|g(?:ulpfile\.(?:babel\.j|(?:t|j))|runt(?:file)?\.j))s|j(?:est\.config\.js|sl\.node\.conf)|(?:tsconfig|lerna)\.json|babel\.config\.js(?:on)?|(?:[cm]ake|Docker)file|\.babelrc(?:.js)?)$'
+MAKEFILES='^(?:(?:g(?:ulpfile\.(?:babel\.m?j|(?:t|m?j))|runt(?:file)?\.j)|(?:(?:rollup[\.\-].*|ava\.)config|karma\.conf)\.j)s|j(?:a(?:kefile(?:\.js)?|smine\.json)|est\.config\.js|sl\.node\.conf)|\.(?:babelrc(?:\.js(?:on)?)?|mocharc\.js(?:on)?)|(?:tsconfig.*|lerna)\.json|babel\.config\.js(?:on)?|(?:[cm]ake|docker)file)$'
 
-pack=package.json
+pack="."
 if [ -e debian/nodejs/main ]; then
-	pack=`egrep -v '^(.*#.*|)$' debian/nodejs/main`
-	pack="$pack/package.json"
-	echo "# Found debian/nodejs/main, package.json is $pack"
+	pack=`grep -E -v '^(.*#.*|)$' debian/nodejs/main`
+	echo "# Found debian/nodejs/main, package.(json|yaml) is in $pack"
 fi
 if [ ! -e $pack ]; then
-	pack=$(dpkg -L `grep ^Package: debian/control|head -n1|sed -e 's/.*: *//'`|grep -v node_modules|grep package.json|head -n1)
+	pack=$(dpkg -L `grep ^Package: debian/control|head -n1|sed -e 's/.*: *//'`|grep -v node_modules|grep -E 'package.(yaml|json)'|head -n1|sed -e 's/\/package.(yaml|json)//')
 fi
-if [ ! -e $pack ]; then
+if [ ! -e $pack/package.json -a ! -e $pack/package.yaml ]; then
 	echo "### Unable to find package.json, aborting"
 	exit 77
 fi
 
-echo "# Using $pack"
+echo "# Using $pack/package.(json|yaml)"
 
-PKG=`perl -MJSON -000 -ne '$a.=$_;END{print JSON::decode_json($a)->{name}}' $pack`
+PKG=`pkgjs-utils pjson $pack name`
 
 if [ -e debian/tests/pkg-js/require-name ]; then
 	REQUIRE_PKG=`cat debian/tests/pkg-js/require-name| head -1| sed 's/^ *//g'`
@@ -62,30 +66,112 @@ fi
 COMMAND=$@
 EVALCODE=0
 function evalNode() {
-	if "$@"; then
+	if "$@" 2>&1; then
+		echo ok
 		EVALCODE=0
 	else
+		echo not ok
 		EVALCODE=1
+	fi
+}
+
+function requireTest() {
+	NAME=$1
+	MPATH=`nodepath $NAME || true`
+	if [ "$MPATH" == "" ]; then
+		echo "#   Testing $NAME: NOT FOUND"
+		EVALCODE=1
+	else
+		TYPE=`pkgjs-utils pjson $MPATH type`
+		MAIN=`pkgjs-utils pjson $MPATH main`
+		if [ "$MAIN" == "" ]; then
+			MAIN=`pkgjs-utils pjson $MPATH exports|grep '"require"' || true`
+		fi
+		if [ "$TYPE" == "module" ]; then
+			rm -rf node_modules
+			echo "# /!\ Package is a ES module"
+			DEPS=`pkgjs-utils pjson $MPATH dependencies|perl -000 -MJSON -lne '$a.=$_;END{if($a){$a=JSON::from_json($a);print $_ foreach(keys %$a)}}'`
+			mkdir node_modules
+			for dep in $DEPS $NAME; do
+				if [ ! -e node_modules/$dep ]; then
+					echo -n "#   Dependency $dep: "
+					if nodepath $dep >/dev/null 2>&1; then
+						MODDIR=`nodepath $dep`
+						RELDIR=node_modules`dirname $MODDIR|sed -e 's/.*nodejs//'`
+						mkdir -p $RELDIR
+						if [ -e /usr/share/node_modules ]; then
+							ln -s $MODDIR $RELDIR
+							echo linked
+						else
+							cp -a $MODDIR $RELDIR
+							echo copied
+						fi
+					else
+						echo "skip copy, $dep not found"
+					fi
+				fi
+			done
+			echo '{"name": "foo","type": "module"}' > package.json
+			echo "import TMP from '$NAME';console.log('Import succeeds')" > test.mjs
+			echo -n "#   Testing $NAME: "
+			evalNode node test.mjs
+			if [ "$EVALCODE" != 0 ]; then
+				echo -n "#   Testing $NAME without default export: "
+				echo "import * as TMP from '$NAME';console.log('Import succeeds')" > test.mjs
+				evalNode node test.mjs
+			fi
+			rm -rf node_modules package.json test.mjs
+			if [[ "$MAIN" != "" && "$EVALCODE" != 0 ]]; then
+				echo -n "#   Testing $NAME via require: "
+				evalNode node --no-deprecation -e "require('$NAME')"
+			fi
+		elif [[ "$MAIN" != "" || -e `nodepath $NAME`/index.js ]]; then
+			echo -n "#   Testing $NAME: "
+			evalNode node --no-deprecation -e "require('$NAME')"
+		else
+			echo "#   Testing $NAME: SKIPPED"
+			EVALCODE=0
+			SKIP=77
+		fi
 	fi
 }
 
 if test "$COMMAND" = "require"; then
 	echo "# Test: require"
+	SKIP=0
+	SKIP_MAIN=0
 	if test "$SKIP_TEST" != "require"; then
-		cd /
-		if test "$LOCAL" = "0"; then
-			evalNode node --no-deprecation -e "require('$REQUIRE_PKG')"
-		else
-			evalNode node --no-deprecation -e "require('.')"
-		fi
-		if [ "$EVALCODE" != "0" ]; then
-			TYPE=`pkgjs-utils pjson . type`
-			if [ "$TYPE" == "module" ]; then
-				echo "/!\ Package is a ES module"
+		if [ -e debian/tests/pkg-js/require-SKIP ]; then
+			ROOT_MODULE_LIST=`pkgjs-utils root_modules_list 2>/tmp/pkg-js.err | grep -v -x -f debian/tests/pkg-js/require-SKIP || true`
+			if echo $REQUIRE_PKG | grep -v -x -f debian/tests/pkg-js/require-SKIP >/dev/null; then
+				true
+			else
+				SKIP_MAIN=1
 			fi
+		else
+			ROOT_MODULE_LIST=`pkgjs-utils root_modules_list 2>/tmp/pkg-js.err || true`
 		fi
+		cat /tmp/pkg-js.err
+		rm -f /tmp/pkg-js.err
+		cd ${AUTOPKGTEST_TMP:-${TMPDIR:-/tmp}}
+		if [ "$SKIP_MAIN" != "1" ]; then
+			requireTest $REQUIRE_PKG
+		else
+			echo "Skip test for $REQUIRE_PKG"
+			SKIP=77
+		fi
+		MAINEVALCODE=$EVALCODE
+		MAINSKIP=$SKIP
+		for module in $ROOT_MODULE_LIST; do
+			requireTest $module
+			let MAINEVALCODE=MAINEVALCODE+EVALCODE || true
+		done
+		if [[ $MAINSKIP == 77 && $MAINEVALCODE == 0 ]]; then
+			exit $MAINSKIP
+		fi
+		exit $MAINEVALCODE
 	else
-		echo '# Require Tests will NOT be run ...'
+		echo '# Require Tests were NOT launched ...'
 		exit 77
 	fi
 elif test "$SKIP_TEST" != "test"; then
@@ -99,7 +185,7 @@ elif test "$SKIP_TEST" != "test"; then
 	#MAKEFILES=`ls|perl -ne "chomp;print qq{\$_ } if /$MAKEFILES/i" || true`
 	MAKEFILES=`ls -a|perl -ne "print if /$MAKEFILES/i"|xargs echo || true`
 	echo "# Build files found: $MAKEFILES"
-	TESTFILES=`ls -d test* 2>/dev/null || true`
+	TESTFILES=`ls -d test* fixture* tap-snapshots map.js 2>/dev/null || true`
 	echo "# Test files found: $TESTFILES"
 	TESTFILES="$TESTFILES $MAKEFILES"
 	if [ -e debian/tests/pkg-js/files ]; then
@@ -170,7 +256,7 @@ elif test "$SKIP_TEST" != "test"; then
 			if [ -w $TDIR/node_modules ]; then
 				for mod in `cat debian/nodejs/extlinks|perl -pe 's/\s+.*$/ /'|grep -v '^#'`; do
 					if nodepath $mod >/dev/null 2>&1; then
-						( cd $TDIR; pkgjs-utils ln $mod )
+						( cd $TDIR; pkgjs-utils ln $mod 2>/dev/null || true)
 					else
 						echo "$mod not found, skipping link"
 					fi
@@ -184,7 +270,7 @@ elif test "$SKIP_TEST" != "test"; then
 			fi
 			if [ -w $TDIR/node_modules ]; then
 				for mod in `cat debian/nodejs/extcopies|perl -pe 's/\s+.*$/ /'|grep -v '^#'`; do
-					if nodepath $mod; then
+					if nodepath $mod >/dev/null 2>&1; then
 						dir=`dirname $mod`
 						mkdir -p "$TDIR/node_modules/$dir"
 						echo cp -rL `nodepath "$mod"` "$TDIR/node_modules/$dir"
@@ -197,7 +283,7 @@ elif test "$SKIP_TEST" != "test"; then
 		fi
 		for mod in `pkgjs-utils modules_list`; do
 			if nodepath $mod >/dev/null 2>&1; then
-				( cd $TDIR; pkgjs-utils ln $mod || true )
+				( cd $TDIR; pkgjs-utils ln $mod 2>/dev/null || true )
 			fi
 		done
 		cd $TDIR
@@ -205,6 +291,7 @@ elif test "$SKIP_TEST" != "test"; then
 			echo "# Searching module in $NPATH"
 			if test -e $NPATH; then
 				echo "# Found $NPATH"
+				echo "# Searching files to link in $NPATH"
 				dolink $NPATH
 			fi
 		done

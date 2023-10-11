@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use JSON;
 use LWP::UserAgent;
+require Debian::PkgJs::Utils;
 
 require Exporter;
 
@@ -20,22 +21,13 @@ my %reg;
 
 sub pjson {
     my ($dir) = @_;
-    unless ( -e "$dir/package.json" ) {
-        print STDERR "/!\\ $dir/package.json not found\n";
-        return undef;
-    }
-    return $json{$dir} if $json{$dir};
-    my $pkgjson;
-    open $pkgjson, "$dir/package.json";
-    my $content = join '', <$pkgjson>;
-    close $pkgjson;
-    eval { $json{$dir} = JSON::from_json($content) };
-    if ($@) {
+    my $res = Debian::PkgJs::Utils::pjson($dir);
+    unless (%$res) {
         print STDERR
-          "npm registry returned malformed JSON:\n$content\n\nSkipping\n";
+          "npm registry returned malformed JSON\nSkipping\n";
         return undef;
     }
-    return $json{$dir};
+    return $res;
 }
 
 sub npmdata {

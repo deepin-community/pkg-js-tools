@@ -1,3 +1,830 @@
+pkg-js-tools (0.15.15) unstable; urgency=medium
+
+  * debhelper:
+    + add rollup.config/mjs to auto-build list
+    + fix links clean
+
+ -- Yadd <yadd@debian.org>  Sun, 17 Sep 2023 09:44:30 +0400
+
+pkg-js-tools (0.15.14) unstable; urgency=medium
+
+  * Scan package.json "workspaces" even if lerna.conf doesn't contain
+    "useWorkspaces"
+  * pkgjs-run: create symbolic links to have "babel" linked to babeljs
+
+ -- Yadd <yadd@debian.org>  Sat, 09 Sep 2023 21:27:49 +0400
+
+pkg-js-tools (0.15.13) unstable; urgency=medium
+
+  * dh_nodejs_autodocs: add CODE_OF_CONDUCT
+  * add-node-component: update warnings
+  * debhelper: improve workspaces support
+  * pkgjs-utils:
+    + add ordered_components_list
+    + add packages_list
+    + improve manpage
+  * pkgjs-depends: add experimental "-a" option
+  * new experimental tool: pkgjs-lerna
+
+ -- Yadd <yadd@debian.org>  Sat, 26 Aug 2023 17:35:26 +0400
+
+pkg-js-tools (0.15.12) unstable; urgency=medium
+
+  * debhelper: fix "!" patterns
+
+ -- Yadd <yadd@debian.org>  Sat, 17 Dec 2022 19:06:13 +0100
+
+pkg-js-tools (0.15.11) unstable; urgency=medium
+
+  * Fix manpage using node-marked >= 1.3.1~
+
+ -- Yadd <yadd@debian.org>  Tue, 06 Dec 2022 17:22:49 +0100
+
+pkg-js-tools (0.15.10) unstable; urgency=medium
+
+  [ Jérémy Lal ]
+  * Markdown linting
+  * B-D-I node-marked-man >= 1.3.0 <!nodoc>
+
+  [ Yadd ]
+  * dh_nodejs_autodocs:
+    + accept readme*.md and readme*.markdown
+
+ -- Yadd <yadd@debian.org>  Wed, 30 Nov 2022 14:14:10 +0100
+
+pkg-js-tools (0.15.9) unstable; urgency=medium
+
+  * dh_nodejs_autodocs:
+    + install NOTICE files (Apache-2.0 license requires it)
+    + install AUTHORS file
+  * Fix autopkgtest: use fakeroot for each dh_*install
+
+ -- Yadd <yadd@debian.org>  Tue, 22 Nov 2022 15:34:33 +0100
+
+pkg-js-tools (0.15.8) unstable; urgency=medium
+
+  [ Ayoyimika Ajibade ]
+  * Update doc
+
+  [ Yadd ]
+  * dh_nodejs_autodocs: rename changelogs into "changelog"
+
+ -- Yadd <yadd@debian.org>  Thu, 03 Nov 2022 17:38:25 +0100
+
+pkg-js-tools (0.15.7) unstable; urgency=medium
+
+  * mjs2cjs:
+    + prepare for rollup 3
+    + add test for option -a
+
+ -- Yadd <yadd@debian.org>  Wed, 12 Oct 2022 18:07:14 +0200
+
+pkg-js-tools (0.15.6) unstable; urgency=medium
+
+  * debhelper: fix external links
+
+ -- Yadd <yadd@debian.org>  Sun, 09 Oct 2022 09:05:15 +0200
+
+pkg-js-tools (0.15.5) unstable; urgency=medium
+
+  * pkgjs-ln: add autopkgtest
+  * New tool: dh_nodejs_build_debug_package
+
+ -- Yadd <yadd@debian.org>  Fri, 30 Sep 2022 18:51:27 +0200
+
+pkg-js-tools (0.15.4) unstable; urgency=medium
+
+  * pkg-js-tools depends on the same version of dh-nodejs
+  * mjs2cjs: fix -a with a file argument
+  * pkgjs-ln:
+    + don't fail if link already exists
+    + fix "-t" option
+
+ -- Yadd <yadd@debian.org>  Fri, 30 Sep 2022 09:35:38 +0200
+
+pkg-js-tools (0.15.3) unstable; urgency=medium
+
+  * doc: replace X-Javascript-Built-Using by XB-Javascript-Built-Using
+    (Closes: #1018728)
+  * mjs2cjs: fix for recent @rollup/plugin-node-resolve
+
+ -- Yadd <yadd@debian.org>  Mon, 19 Sep 2022 17:46:08 +0200
+
+pkg-js-tools (0.15.2) unstable; urgency=medium
+
+  * Back to unstable, BREACKING CHANGE:
+    Since version 0.15.0, pkg-js-autopkgtest launches Node.js with
+    `--disable-proto=throw`. This causes tests to fail if
+    `Object.prototype.__proto__` property is used. See pkg-js-autopkgtest(7)
+
+ -- Yadd <yadd@debian.org>  Mon, 12 Sep 2022 12:16:58 +0200
+
+pkg-js-tools (0.15.1) experimental; urgency=medium
+
+  * autopkgtest: use NODE_OPTIONS not NODE_DEFAULTS
+
+ -- Yadd <yadd@debian.org>  Sat, 10 Sep 2022 21:50:15 +0200
+
+pkg-js-tools (0.15.0) experimental; urgency=medium
+
+  * autopkgtest: disable prototype using
+    NODE_DEFAULTS="--disable-proto=throw"
+
+ -- Yadd <yadd@debian.org>  Sat, 10 Sep 2022 19:50:07 +0200
+
+pkg-js-tools (0.14.37) unstable; urgency=medium
+
+  * Install getFromNpmCache manpage
+  * Add Jakefile into makefiles list
+  * debhelper:
+    + don't generate pkgjs-lock.json for rollup, only for
+      node-rollup-plugin-node-resolve
+
+ -- Yadd <yadd@debian.org>  Fri, 09 Sep 2022 08:31:53 +0200
+
+pkg-js-tools (0.14.36) unstable; urgency=medium
+
+  * pkgjs-depends:
+    + display missing peerDependencies
+    + add --no-progress option
+    + don't display progress bar when output isn't a TTY
+    + fix main package detection when name starts with @
+    + add --no-peer-dependencies option
+
+ -- Yadd <yadd@debian.org>  Thu, 11 Aug 2022 21:18:09 +0200
+
+pkg-js-tools (0.14.35) unstable; urgency=medium
+
+  * pkgjs-depends: fix main package detection (broken in 0.14.34)
+
+ -- Yadd <yadd@debian.org>  Wed, 10 Aug 2022 08:40:41 +0200
+
+pkg-js-tools (0.14.34) unstable; urgency=medium
+
+  * pkgjs-depends:
+    + BREAKING CHANGE: old --graph option renamed to --missing-graph
+    + add --graph option
+
+ -- Yadd <yadd@debian.org>  Wed, 10 Aug 2022 07:03:11 +0200
+
+pkg-js-tools (0.14.33) unstable; urgency=medium
+
+  * Fix build dependencies (Closes: #1016689)
+  * pkgjs-depends:
+    + include version for inspected also in "missing" part (Closes: #1016691)
+    + display the total amount of missing dependencies (Closes: #1016692)
+    + add --graph option (See: #1016587)
+
+ -- Yadd <yadd@debian.org>  Sat, 06 Aug 2022 08:26:58 +0200
+
+pkg-js-tools (0.14.32) unstable; urgency=medium
+
+  * New tool: getFromNpmCache
+  * pkgjs-install: use npm cache if available
+  * autopkgtest:
+    + add .mocharc.json and .babelrc.json in Makefile list
+  * pkgjs-depends: fix for circular dependencies (Closes: #1016483)
+
+ -- Yadd <yadd@debian.org>  Tue, 02 Aug 2022 18:54:30 +0200
+
+pkg-js-tools (0.14.31) unstable; urgency=medium
+
+  * add-node-component: include main module into component tree
+                        (option --cmp-tree)
+  * All tools: include peerDependencies in dependencies
+  * Declare compliance with policy 4.6.1
+  * Update lintian overrides
+
+ -- Yadd <yadd@debian.org>  Wed, 29 Jun 2022 16:59:19 +0200
+
+pkg-js-tools (0.14.30) unstable; urgency=medium
+
+  * debhelper: fix ignoring additional_components for lerna components
+
+ -- Yadd <yadd@debian.org>  Sun, 26 Jun 2022 08:03:48 +0200
+
+pkg-js-tools (0.14.29) unstable; urgency=medium
+
+  * autopkgtest: reduce noise
+
+ -- Yadd <yadd@debian.org>  Wed, 15 Jun 2022 06:33:32 +0200
+
+pkg-js-tools (0.14.28) unstable; urgency=medium
+
+  * Fix pkgjs-install-minimal
+
+ -- Yadd <yadd@debian.org>  Thu, 09 Jun 2022 13:15:01 +0200
+
+pkg-js-tools (0.14.27) unstable; urgency=medium
+
+  * pkgjs-install:
+    + add --copy option
+    + add --no-package-lock option
+  * add-node-component: update --cmp-tree to display all components
+  * New tool: pkgjs-install-minimal
+
+ -- Yadd <yadd@debian.org>  Thu, 09 Jun 2022 12:48:48 +0200
+
+pkg-js-tools (0.14.26) unstable; urgency=medium
+
+  * pkgjs-install:
+    + fix bin links
+    + launch postinst script with pkgjs-run
+    + don't download already installed modules
+    + fix --install-command
+  * autopkgtest: don't fail when link exists
+  * pkgjs-ln: add '-t' option
+  * pkgjs-run: replace also `pnpm run`
+
+ -- Yadd <yadd@debian.org>  Sun, 05 Jun 2022 20:53:16 +0200
+
+pkg-js-tools (0.14.25) unstable; urgency=medium
+
+  * nodepath: improve -t option for builtin modules
+  * New tool: pkgjs-easy-to-update, show packages easy to update
+  * debhelper: fix additional components detection
+
+ -- Yadd <yadd@debian.org>  Wed, 18 May 2022 17:49:22 +0200
+
+pkg-js-tools (0.14.24) unstable; urgency=medium
+
+  * pkgjs-install: add --no-download option
+  * pkgjs-run: replace npm run|install by pkgjs-run|install
+  * nodepath: add -t option to search for typescript declarations
+
+ -- Yadd <yadd@debian.org>  Tue, 17 May 2022 18:49:35 +0200
+
+pkg-js-tools (0.14.23) unstable; urgency=medium
+
+  * pkgjs-install: fix install for recent npm
+
+ -- Yadd <yadd@debian.org>  Fri, 13 May 2022 09:24:08 +0200
+
+pkg-js-tools (0.14.22) unstable; urgency=medium
+
+  * pkgjs-install:
+    + reduce packages to link/download to what is strictly necessary
+    + add --all option to go back to previous behavior
+    + add --strict option
+    + add --audit option
+    + launch npm with --ignore-scripts when generating package-lock.json
+  * New tool: pkgjs-run
+
+ -- Yadd <yadd@debian.org>  Thu, 12 May 2022 13:55:39 +0200
+
+pkg-js-tools (0.14.21) unstable; urgency=medium
+
+  * Refactor semver
+  * pkgjs-install: fix --install
+
+ -- Yadd <yadd@debian.org>  Mon, 09 May 2022 11:32:06 +0200
+
+pkg-js-tools (0.14.20) unstable; urgency=medium
+
+  * Add lolex in banned list (renamed to @sinonjs/fake-timers)
+  * New tool: pkgjs-install, TODO: --strict mode
+
+ -- Yadd <yadd@debian.org>  Sun, 08 May 2022 09:06:08 +0200
+
+pkg-js-tools (0.14.19) unstable; urgency=medium
+
+  * autopkgtest: automatically copy map.js (needed by tap >= 15)
+  * debhelper: fix links when wanted module has a name which is also a
+    built-in module (Closes: #1009579)
+
+ -- Yadd <yadd@debian.org>  Sat, 16 Apr 2022 08:57:09 +0200
+
+pkg-js-tools (0.14.18) unstable; urgency=medium
+
+  * dh_nodejs_autodocs: fix auto_dispatch
+
+ -- Yadd <yadd@debian.org>  Mon, 11 Apr 2022 18:07:49 +0200
+
+pkg-js-tools (0.14.17) unstable; urgency=medium
+
+  * Fix autopkgtest
+
+ -- Yadd <yadd@debian.org>  Sat, 09 Apr 2022 12:59:34 +0200
+
+pkg-js-tools (0.14.16) unstable; urgency=medium
+
+  * mjs2cjs:
+    + fix when wrapper exists (debian/index.cjs)
+    + change default commonjs file to pkg.exports.require
+
+ -- Yadd <yadd@debian.org>  Sat, 09 Apr 2022 09:41:59 +0200
+
+pkg-js-tools (0.14.15) unstable; urgency=medium
+
+  * doc: add features history
+  * Clean .nyc_output
+  * Suggests rollup
+  * Improve mjs2cjs: keep type:module to avoid breaking mjs
+
+ -- Yadd <yadd@debian.org>  Fri, 08 Apr 2022 16:48:27 +0200
+
+pkg-js-tools (0.14.14) unstable; urgency=medium
+
+  * mjs2cjs: improve option "-a"
+  * debhelper: fix dh_nodejs_substvars
+
+ -- Yadd <yadd@debian.org>  Fri, 01 Apr 2022 15:46:25 +0200
+
+pkg-js-tools (0.14.13) unstable; urgency=medium
+
+  * mjs2cjs: add option -a ("auto")
+
+ -- Yadd <yadd@debian.org>  Thu, 31 Mar 2022 14:43:39 +0200
+
+pkg-js-tools (0.14.12) unstable; urgency=medium
+
+  * mjs2cjs:
+    + add -b ("bundle") and -o ("out") options
+    + drop dependency to terser
+
+ -- Yadd <yadd@debian.org>  Wed, 30 Mar 2022 11:12:09 +0200
+
+pkg-js-tools (0.14.11) unstable; urgency=medium
+
+  * Add no_lerna tests
+  * autopkgtest: improve "require" test for modules when
+    /usr/share/node_modules links exists (given by nodejs 14 in unstable)
+
+ -- Yadd <yadd@debian.org>  Fri, 25 Mar 2022 16:07:05 +0100
+
+pkg-js-tools (0.14.10) unstable; urgency=medium
+
+  [ Yadd ]
+  * autopkgtest: able to skip main module using
+    debian/tests/pkg-js/require-SKIP
+
+  [ Martina Ferrari ]
+  * Fix dh-sequence-nodejs-no-lerna (Closes: #1008230)
+  * Add missing EOL in error messages.
+
+  [ Yadd ]
+  * Fix doc: a "main" component is always required (Closes: #1008229). Thanks
+    to Martina Ferrari
+
+ -- Yadd <yadd@debian.org>  Fri, 25 Mar 2022 15:26:47 +0100
+
+pkg-js-tools (0.14.9) unstable; urgency=medium
+
+  * Reupload after nodejs 14 transition
+
+ -- Yadd <yadd@debian.org>  Wed, 23 Mar 2022 06:27:57 +0100
+
+pkg-js-tools (0.14.8) unstable; urgency=medium
+
+  * nodepath: manage builtins modules
+  * debhelper:
+    + dh_nodejs_substvars now accept virtual packages without version
+    + follow lerna.json#useWorkspaces
+    + Add ${nodejs:Provides} test
+
+ -- Yadd <yadd@debian.org>  Tue, 22 Mar 2022 14:22:13 +0100
+
+pkg-js-tools (0.14.7) unstable; urgency=medium
+
+  * nodepath: exit with error if package is wanted (-p) and result path is
+    related
+  * debhelper: fix substvars names (Closes: #1008034)
+
+ -- Yadd <yadd@debian.org>  Mon, 21 Mar 2022 12:04:33 +0100
+
+pkg-js-tools (0.14.6) unstable; urgency=medium
+
+  * debhelper:
+    + Don't fail when subsvars were not generated, just warn
+      (Closes: #1008037)
+
+ -- Yadd <yadd@debian.org>  Mon, 21 Mar 2022 11:20:47 +0100
+
+pkg-js-tools (0.14.5) unstable; urgency=medium
+
+  * dh_nodejs_autodocs:
+    + add "auto_dispatch"
+    + fix link error
+  * debhelper:
+    + add tsconfig.tsbuildinfo in blacklist
+    + drop tests?/ components from "workspaces"
+    + silently skip files for component list
+    + generate ${nodeFoo:Provides} for each component
+
+ -- Yadd <yadd@debian.org>  Fri, 18 Mar 2022 06:03:57 +0100
+
+pkg-js-tools (0.14.4) unstable; urgency=medium
+
+  * Reduce dh-nodejs dependencies
+  * Back to unstable after successful tests
+
+ -- Yadd <yadd@debian.org>  Tue, 15 Mar 2022 17:31:00 +0100
+
+pkg-js-tools (0.14.3) experimental; urgency=medium
+
+  * pkgjs-depends:
+    + fix progressbar when launched with local package.json
+    + fix mismatch display (module version, not package one)
+
+ -- Yadd <yadd@debian.org>  Tue, 15 Mar 2022 16:12:46 +0100
+
+pkg-js-tools (0.14.2) experimental; urgency=medium
+
+  * pkgjs-depends: update doc
+  * Replace "Breaks pkg-js-tools (<< 0.14.0~)" by "Conflicts"
+
+ -- Yadd <yadd@debian.org>  Tue, 15 Mar 2022 15:53:25 +0100
+
+pkg-js-tools (0.14.1) experimental; urgency=medium
+
+  * Restore lintian doc
+  * pkgjs-depends:
+    + add cache system based on Cache::FileCache
+    + add progressbar
+
+ -- Yadd <yadd@debian.org>  Tue, 15 Mar 2022 15:18:54 +0100
+
+pkg-js-tools (0.14.0) experimental; urgency=medium
+
+  * split pkg-js-tools into dh-nodejs + pkg-js-tools
+
+ -- Yadd <yadd@debian.org>  Mon, 14 Mar 2022 19:07:23 +0100
+
+pkg-js-tools (0.13.0) unstable; urgency=medium
+
+  * debhelper:
+    + add dh_nodejs_autodocs tool
+
+ -- Yadd <yadd@debian.org>  Sun, 13 Mar 2022 15:57:02 +0100
+
+pkg-js-tools (0.12.14) unstable; urgency=medium
+
+  * pkgjs-depends:
+    + add option -c to check if versions match
+    + check also peerDependencies
+
+ -- Yadd <yadd@debian.org>  Sun, 13 Mar 2022 11:02:40 +0100
+
+pkg-js-tools (0.12.13) unstable; urgency=medium
+
+  * debhelper: better lerna fix
+  * autopkgtest: automatically copy tap-snapshots and fixture*
+
+ -- Yadd <yadd@debian.org>  Sat, 12 Mar 2022 08:00:56 +0100
+
+pkg-js-tools (0.12.12) unstable; urgency=medium
+
+  * debhelper: drop main component dir from install when it contains a
+    "packages" field in lerna.conf
+
+ -- Yadd <yadd@debian.org>  Thu, 10 Mar 2022 14:19:55 +0100
+
+pkg-js-tools (0.12.11) unstable; urgency=medium
+
+  * debhelper:
+    * don't include tests?/* from workspaces into additional
+      components
+    * add ability to skip an automatically added component
+
+ -- Yadd <yadd@debian.org>  Mon, 07 Mar 2022 09:38:29 +0100
+
+pkg-js-tools (0.12.10) unstable; urgency=medium
+
+  * Add global debhelper test to avoid regressions
+  * Add gulpfile.mjs to makefiles list
+  * autopkgtest: fix import test when no default export exists
+    (Closes: #1006378)
+
+ -- Yadd <yadd@debian.org>  Thu, 24 Feb 2022 17:39:27 +0100
+
+pkg-js-tools (0.12.9) unstable; urgency=medium
+
+  * Add missing dependency to libgraph-perl
+
+ -- Yadd <yadd@debian.org>  Tue, 22 Feb 2022 05:56:23 +0100
+
+pkg-js-tools (0.12.8) unstable; urgency=medium
+
+  [ Roland Mas ]
+  * debhelper: Rework cmp_ordered_list to provide reliable sorting of
+    components
+
+  [ Yadd ]
+  * debhelper: don't fail if workspaces field isn't understood
+
+ -- Yadd <yadd@debian.org>  Mon, 21 Feb 2022 17:50:06 +0100
+
+pkg-js-tools (0.12.7) unstable; urgency=medium
+
+  * debhelper: read package.json#workspaces to find additional components
+
+ -- Yadd <yadd@debian.org>  Sat, 19 Feb 2022 13:42:17 +0100
+
+pkg-js-tools (0.12.6) unstable; urgency=medium
+
+  * mjs2cjs: add default output (index.cjs)
+  * Documentation:
+    + Rephrase and reformat doc. Thanks to Jonas Smedegaard and
+      Julien Puydt
+    + Provide pkg-js-tools and pkg-js-autopkgtest manpages built from
+      markdown. Thanks to Jérémy Lal for providing the awesome marked-man
+
+ -- Yadd <yadd@debian.org>  Fri, 18 Feb 2022 11:08:18 +0100
+
+pkg-js-tools (0.12.5) unstable; urgency=medium
+
+  * Add jasmine.json into makefiles list
+  * autopkgtest: fix "require" test when lerna.json exists
+
+ -- Yadd <yadd@debian.org>  Wed, 16 Feb 2022 14:03:19 +0100
+
+pkg-js-tools (0.12.4) unstable; urgency=medium
+
+  * Update doc
+  * Fix autopkgtest (missing dependencies)
+
+ -- Yadd <yadd@debian.org>  Mon, 14 Feb 2022 18:21:42 +0100
+
+pkg-js-tools (0.12.3) unstable; urgency=medium
+
+  * mjs2cjs:
+    + fix if dependencies field doesn't exist
+    + add test
+
+ -- Yadd <yadd@debian.org>  Mon, 14 Feb 2022 11:38:42 +0100
+
+pkg-js-tools (0.12.2) unstable; urgency=medium
+
+  * Add nodepath test
+  * Add mjs2cjs tool: generate comonjs file using a generic rollup.config.js
+  * Back to unstable. Main difference since 0.11.14: add lerna support
+
+ -- Yadd <yadd@debian.org>  Mon, 14 Feb 2022 10:37:22 +0100
+
+pkg-js-tools (0.12.1) experimental; urgency=medium
+
+  * Import 0.11.14 changes
+
+ -- Yadd <yadd@debian.org>  Fri, 11 Feb 2022 17:24:14 +0100
+
+pkg-js-tools (0.12.0) experimental; urgency=medium
+
+  * debhelper: add lerna.conf support (Closes: #988561)
+
+ -- Yadd <yadd@debian.org>  Wed, 09 Feb 2022 15:07:44 +0100
+
+pkg-js-tools (0.11.14) unstable; urgency=medium
+
+  * Update description. Thanks to Jonas Smedegaard
+  * autopkgtest: fix require/module test
+
+ -- Yadd <yadd@debian.org>  Fri, 11 Feb 2022 15:37:53 +0100
+
+pkg-js-tools (0.11.13) unstable; urgency=high
+
+  * add-node-component: add -p options to set a component-name prefix
+                        (env var: PKGJS_CMP_PREFIX)
+  * nodepath: fix non CJS search
+
+ -- Yadd <yadd@debian.org>  Tue, 08 Feb 2022 17:18:05 +0100
+
+pkg-js-tools (0.11.12) unstable; urgency=medium
+
+  * pkgjs-audit: add -s option
+  * Doc:
+    * Update pkgjs-audit doc
+    * Add some library manpages
+
+ -- Yadd <yadd@debian.org>  Sat, 05 Feb 2022 17:39:08 +0100
+
+pkg-js-tools (0.11.11) unstable; urgency=medium
+
+  * doc: use X-Javascript-Built-Using, not Built-Using
+  * pkgjs-audit: test also package itself
+  * lintian:
+    + accept package.yaml
+    + launches a pkgjs-audit in profile pkg-js-extra
+
+ -- Yadd <yadd@debian.org>  Sat, 05 Feb 2022 07:51:32 +0100
+
+pkg-js-tools (0.11.10) unstable; urgency=medium
+
+  * nodepath: fix search:
+    + default: only in nodejs dirs
+    + add -r option to search in **/node_modules
+  * debhelper: improve Built-Using build
+
+ -- Yadd <yadd@debian.org>  Fri, 04 Feb 2022 09:45:40 +0100
+
+pkg-js-tools (0.11.9) unstable; urgency=medium
+
+  * pkgjs-audit: able to run in a read-only directory
+
+ -- Yadd <yadd@debian.org>  Thu, 03 Feb 2022 15:45:29 +0100
+
+pkg-js-tools (0.11.8) unstable; urgency=medium
+
+  * pkgjs-audit: able to audit an installed package
+  * debhelper: generate ${nodejs:BuiltUsing} variable
+
+ -- Yadd <yadd@debian.org>  Thu, 03 Feb 2022 15:15:19 +0100
+
+pkg-js-tools (0.11.7) unstable; urgency=medium
+
+  * autopktest: fix stderr
+
+ -- Yadd <yadd@debian.org>  Fri, 28 Jan 2022 18:26:52 +0100
+
+pkg-js-tools (0.11.6) unstable; urgency=medium
+
+  * autopkgtest: improve require test
+  * debhelper: make pkgjs-lock.json reproducible
+
+ -- Yadd <yadd@debian.org>  Fri, 28 Jan 2022 18:22:21 +0100
+
+pkg-js-tools (0.11.5) unstable; urgency=medium
+
+  * debhelper: fix clean when additional component is in node_modules
+  * autopkgtest: better fix for reproducibility
+
+ -- Yadd <yadd@debian.org>  Mon, 17 Jan 2022 06:59:53 +0100
+
+pkg-js-tools (0.11.3) unstable; urgency=medium
+
+  * autopkgtest: try "require" if "type=module" and "main" exists
+  * debhelper:
+    + fix pkgjs-lock.json build for reproducibility (Closes: #1003809)
+
+ -- Yadd <yadd@debian.org>  Sun, 16 Jan 2022 09:03:59 +0100
+
+pkg-js-tools (0.11.2) unstable; urgency=medium
+
+  * tools: add pkgjs-audit
+  * debhelper:
+    + improve pkgjs-lock.json: parse devDeps and deps
+    + add browserify* in WEBPACKS
+  * pkgjs-depends: fix name in help
+  * Back to unstable:
+    + Breaking change since 0.10.x: build fails if autobuild fails
+
+ -- Yadd <yadd@debian.org>  Thu, 13 Jan 2022 15:47:31 +0100
+
+pkg-js-tools (0.11.1) experimental; urgency=medium
+
+  * Fix version reported by tools
+  * debhelper: render build reproducible by sorting pkgjs-lock.json keys
+
+ -- Yadd <yadd@debian.org>  Mon, 10 Jan 2022 15:58:19 +0100
+
+pkg-js-tools (0.11.0) experimental; urgency=medium
+
+  * autopkgtest: better error display in require test
+  * debhelper:
+    + build pkgjs-lock.json if package looks like a bundle
+    + autodetect rollup/webpack configuration (Closes: #977607)
+    + BREKING CHANGE: fail if autobuild fails
+
+ -- Yadd <yadd@debian.org>  Mon, 10 Jan 2022 14:49:58 +0100
+
+pkg-js-tools (0.10.5) unstable; urgency=medium
+
+  * autopkgtest: little fix in require test
+
+ -- Yadd <yadd@debian.org>  Sun, 02 Jan 2022 10:06:41 +0100
+
+pkg-js-tools (0.10.4) unstable; urgency=medium
+
+  * autopkgtest: don't output ignored errors to STDERR
+
+ -- Yadd <yadd@debian.org>  Sat, 01 Jan 2022 18:59:29 +0100
+
+pkg-js-tools (0.10.3) unstable; urgency=medium
+
+  * Back to unstable. Main change since 0.9.92:
+    + autopkgtest "require" test:
+      * checks all modules installed in nodejs root directories
+      * checks also modules "type=module"
+
+ -- Yadd <yadd@debian.org>  Sat, 01 Jan 2022 09:32:21 +0100
+
+pkg-js-tools (0.10.2) experimental; urgency=medium
+
+  * autopkgtest: improve require test for other modules
+  * Update autopkgtest doc
+
+ -- Yadd <yadd@debian.org>  Fri, 31 Dec 2021 20:12:32 +0100
+
+pkg-js-tools (0.10.1) experimental; urgency=medium
+
+  * autopkgtest: fix require test
+
+ -- Yadd <yadd@debian.org>  Fri, 31 Dec 2021 15:33:16 +0100
+
+pkg-js-tools (0.10.0) experimental; urgency=medium
+
+  * Banned modules:
+    * Mark mdn-browser-compat-data as banned (replaced bu
+      @mdn/browser-compat-data)
+    * Add old rollup-plugin-* in banned list
+    * Banned modules: display reason
+    * Add test
+  * Add tests for add-node-component, del-node-component, pkgjs-depends
+  * pkgjs-utils: add new commands root_modules_list and root_components_list
+  * autopkgtest: test root modules
+
+ -- Yadd <yadd@debian.org>  Thu, 30 Dec 2021 21:43:47 +0100
+
+pkg-js-tools (0.9.92) unstable; urgency=medium
+
+  * Fix Npm registry parser
+
+ -- Yadd <yadd@debian.org>  Fri, 24 Dec 2021 07:05:52 +0100
+
+pkg-js-tools (0.9.91) unstable; urgency=medium
+
+  * debhelper/autopkgtest: add package.yaml support
+
+ -- Yadd <yadd@debian.org>  Thu, 23 Dec 2021 17:18:53 +0100
+
+pkg-js-tools (0.9.90) unstable; urgency=medium
+
+  * pkgjs-depends:
+    + without args: use current package.json fields
+    + better "npm view" result check
+    + continue to parse if module is embedded in main package
+  * debhelper: split auto_configure
+  * pkgjs-utils: add link_external_modules and link_internal_modules functions
+  * Drop debug output
+
+ -- Yadd <yadd@debian.org>  Mon, 20 Dec 2021 08:55:28 +0100
+
+pkg-js-tools (0.9.89) unstable; urgency=medium
+
+  * lintian: drop debug output
+
+ -- Yadd <yadd@debian.org>  Wed, 15 Dec 2021 22:00:46 +0100
+
+pkg-js-tools (0.9.88) unstable; urgency=medium
+
+  * nodepath: change dir to / before searching module
+  * debhelper: improve path resolve: understand "*.*(c)[tj]s*"
+
+ -- Yadd <yadd@debian.org>  Wed, 15 Dec 2021 14:29:58 +0100
+
+pkg-js-tools (0.9.87) unstable; urgency=high
+
+  * debhelper: fix configure step (links were not always created)
+
+ -- Yadd <yadd@debian.org>  Tue, 14 Dec 2021 09:50:40 +0100
+
+pkg-js-tools (0.9.86) unstable; urgency=medium
+
+  * autopkgtest: skip instead of fail when trying to require a type=module
+  * lintian: fix extr-profile and test embedded modules
+  * Back to unstable
+
+ -- Yadd <yadd@debian.org>  Mon, 13 Dec 2021 16:31:55 +0100
+
+pkg-js-tools (0.9.85) experimental; urgency=medium
+
+  * Internal changes
+    * Add build dependency to node-types-node
+    * debhelper:
+      + improve clean
+      + add extlinks/extcopies test
+    * Fix markdown for pandoc
+  * debhelper:
+    + fix perms also for mts, cjs
+    + skip require test for type=module
+  * autopkgtest:
+    + fix module detection
+    + replace require test for modules by import
+
+ -- Yadd <yadd@debian.org>  Sun, 12 Dec 2021 11:17:53 +0100
+
+pkg-js-tools (0.9.84) unstable; urgency=medium
+
+  * debhelper: fix 0.9.83 regression on extcopies
+
+ -- Yadd <yadd@debian.org>  Fri, 26 Nov 2021 18:25:30 +0100
+
+pkg-js-tools (0.9.83) unstable; urgency=medium
+
+  * pkgjs-depends: display searched package and version
+  * debhelper: when @types/foo isn't available for copy/link, fallback to
+               "foo". This permits one to not have regressions when a module
+               embeds its typescript declaration and Debian maintainer removes
+               embedded @types/foo
+
+ -- Yadd <yadd@debian.org>  Fri, 26 Nov 2021 17:53:53 +0100
+
+pkg-js-tools (0.9.82) unstable; urgency=medium
+
+  * del-node-component: fix when component name contains "-"
+  * nodepath: fix for type=modules
+
+ -- Yadd <yadd@debian.org>  Wed, 24 Nov 2021 11:40:13 +0100
+
 pkg-js-tools (0.9.81) unstable; urgency=medium
 
   * add-node-component: fix filenamemangle for npm-registry modules

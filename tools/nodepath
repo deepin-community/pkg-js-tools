@@ -2,8 +2,6 @@
 
 set -e
 
-VERSION=0.2
-
 function usage()
 {
 cat <<EOF
@@ -14,8 +12,11 @@ nodepath shows the file or the package that corresponds to the node given module
 Options:
  -p: print package
  -o: print only package (implies -p)
+ -r: search also in related paths (**/node_modules)
+ -B: ignore builtin modules
+ -t: search for typescript declarations
 
-Copyright (C) 2019 Xavier Guimard <yadd@debian.org>
+Copyright (C) Yadd <yadd@debian.org>
 
 Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
 EOF
@@ -27,7 +28,10 @@ if test "$1" = "--version"; then
 fi
 PACKAGE=0
 PACKAGEONLY=0
-while getopts 'hpo' opt; do
+RELATED=0
+NOBUILTIN=0
+TS=0
+while getopts 'hporBt' opt; do
 	case $opt in
 		h)
 			usage
@@ -40,6 +44,15 @@ while getopts 'hpo' opt; do
 			PACKAGE=1
 			PACKAGEONLY=1
 			;;
+		r)
+			RELATED=1
+			;;
+		B)
+			NOBUILTIN=1
+			;;
+		t)
+			TS=1
+			;;
 		*)
 			echo "Unknown option $opt" >&2
 			exit 1
@@ -49,18 +62,85 @@ done
 shift $((OPTIND-1))
 MODULE=$1
 
-FILE=`(node -p "require.resolve('$MODULE'+'/package.json')" 2>/dev/null || true) | perl -pe 's/\/package\.json$/$1/'`
+if test "$MODULE" = ""; then
+	usage
+	exit 1
+fi
+
+if test "$NOBUILTIN" = "0"; then
+if node -e 'process.exit(!require("module").builtinModules.includes(process.argv[1]))' $MODULE; then
+	if test "$TS" = "1"; then
+		MODULE="/usr/share/nodejs/@types/node"
+	fi
+	if test "$PACKAGE" = "1"; then
+		if test $PACKAGEONLY = 1; then
+			echo nodejs
+		else
+			echo "nodejs: $MODULE"
+		fi
+	else
+		echo $MODULE
+	fi
+	exit
+fi
+fi
+
+function resolve()
+{
+	MOD=$1
+	P=`(node -p "require.resolve('$MOD'+'/package.json')" 2>/dev/null || true) | perl -pe 's/\/package\.json$/$1/'`
+	if [ "$P" == "" ]; then
+		LOG=`mktemp`
+		P=`(node -p "require.resolve('$MOD')" 2>$LOG|perl -pe 's/(nodejs\/(?:\@[^\/]*\/)?[^\@][^\/]*)(\/.*)?$/$1/') || true`
+		if [ "$P" == "" ]; then
+			if grep 'ERR_PACKAGE_PATH_NOT_EXPORTED' $LOG >/dev/null; then
+				echo `perl -ne 'if(m#(/usr/\S+/nodejs/\S+)/package\.json#){print $1;exit}' $LOG`
+			fi
+		fi
+		rm -f $LOG
+	fi
+	echo $P
+}
+
+if test $RELATED = "1"; then
+	FILE=`resolve $MODULE`
+else
+	FILE=`(cd /;resolve $MODULE)`
+fi
 if [ "$FILE" == "" ]; then
-	FILE=`node -p "require.resolve('$MODULE')"|perl -pe 's/(nodejs\/(?:\@[^\/]*\/)?[^\@][^\/]*)(\/.*)?$/$1/'`
-	if [ "$FILE" == "" ]; then
-		exit 1
+	echo "Not found" >&2
+	rm -f $LOG
+	exit 1
+fi
+
+if test "$TS" = "1"; then
+	TYPES=`pkgjs-pjson $FILE types`
+	if test "$TYPES" = ""; then
+		if test ! -e $FILE/index.d.ts; then
+			TSMODULE=@types/`echo $MODULE|perl -pe 's#^\@(.*?)/#$1__#'`
+			FILE=`nodepath $TSMODULE`
+		fi
 	fi
 fi
 if test "$PACKAGE" = "1"; then
-	if test $PACKAGEONLY = 1; then
-		dpkg -S $FILE|sed -e 's/:.*//'
+	if test "$FILE" = "${FILE#/}"; then
+		echo "No package for $FILE" >&2
+		exit 1
+	fi
+	LOG=`mktemp`
+	PKG=`dpkg -S $FILE 2>$LOG || true`
+	if test $RELATED = "1" -a "$PKG" = ""; then
+		PKG=": $FILE"
+	fi
+	if test "$PKG" != ""; then
+		if test $PACKAGEONLY = 1; then
+			echo $PKG|sed -e 's/:.*//'
+		else
+			echo $PKG
+		fi
 	else
-		dpkg -S $FILE
+		echo "No package for $FILE" >&2
+		exit 1
 	fi
 else
 	echo $FILE

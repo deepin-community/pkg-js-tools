@@ -3,13 +3,52 @@
 use strict;
 use Dpkg::IPC;
 use Debian::PkgJs::Banned;
+use Debian::PkgJs::Cache;
+use Debian::PkgJs::Dependencies;
+use Debian::PkgJs::Semver;
+use Debian::PkgJs::Utils;
 use Debian::PkgJs::Version;
 use Getopt::Long;
+use IO::Pipe;
 use JSON;
+use List::Util qw(any);
+use Progress::Any '$progress';
+use Progress::Any::Output;
+
+use constant OFFSET                => '  ';
+use constant DEFAULTRECURSIONLIMIT => 100;
+
+Progress::Any::Output->set( 'TermProgressBarColor',
+    template =>
+'<color ffff00>%p%</color> <color 808000>[</color>%B<color 808000>]</color>'
+);
 
 my %opt;
+my @CMP;
 
-GetOptions( \%opt, 'h|help', 'v|version', 'dev|development', 'debug' );
+# I - Initialization: get options/args
+
+GetOptions(
+    \%opt, qw(
+      h|help
+      v|version
+      dev|development
+      debug
+      c|checkversions
+      a|all-components
+      clearcache
+      nocache|no-cache
+      l|limit=s
+      graph|g
+      mg|missing-graph
+      np|no-progress
+      npd|no-peer-dependencies
+    )
+);
+
+my $currentPackage = '';
+$opt{cachedelay} //= CACHEDELAY;
+my $cache = Debian::PkgJs::Cache->new(%opt);
 
 # Find name
 if ( !@ARGV and -e 'package.json' ) {
@@ -17,15 +56,25 @@ if ( !@ARGV and -e 'package.json' ) {
     open my $f, 'package.json';
     eval {
         my $res = JSON::from_json(<$f>);
-        push @ARGV, $res->{name} if $res->{name};
+        if ( $res->{name} ) {
+            push @ARGV,
+              $res->{name} . ( $res->{version} ? "\@$res->{version}" : '' );
+            $opt{local} = $res;
+        }
+        else {
+            print STDERR "Unable to find name from ./package.json\n";
+        }
     };
-    @ARGV = ('unknown') unless @ARGV;
 }
 
 # Usage and version
+if ( $opt{v} ) {
+    print "$VERSION\n";
+    exit;
+}
 if ( $opt{h} or !@ARGV ) {
     print <<EOF;
-Usage: pkgjs-ls
+Usage: pkgjs-depends
 
 Search recursively dependencies of the given module name (else use
 `package.json#name`) and displays:
@@ -36,161 +85,272 @@ Options:
  -h, --help: print this
  --dev, --development: includes dev dependencies
                        (for main package only, not dependencies)
+ --no-peer-dependencies, --npd: don't include peer dependencies
  --debug
+ -c, --checkversions: verify that version matches
+ --nocache: don't use local cache
+ --clearcache: clear local cache
+ --limit: recursion limit (default: 100)
+ --graph, -g: display modules using a digraph of relations
+ --missing-graph, --mg: display only missing modules using a digraph of relations
+ --no-progress, --np: don't print progress bar
 EOF
     exit;
 }
-elsif ( $opt{v} ) {
-    print "$VERSION\n";
-    exit;
-}
+
+$opt{np} //= 1 if not( -t STDOUT ) or $opt{graph} or $opt{mg};
+
+my $recursionLimit = $opt{l} || DEFAULTRECURSIONLIMIT;
 
 # nodejs paths
 my @npaths =
   ( '/usr/share/nodejs', '/usr/lib/nodejs', glob("/usr/lib/*/nodejs") );
 
-# Prepare Semver server
-my $semver = undef;
-
-use IO::Pipe;
-my $qchannel = IO::Pipe->new;
-my $rchannel = IO::Pipe->new;
-
-my $pid = fork;
-
-unless ($pid) {
-    $qchannel->reader();
-    $rchannel->writer();
-    open STDIN,  '<&', $qchannel->fileno or die $!;
-    open STDOUT, '>&', $rchannel->fileno or die $!;
-    exec qq@node -e 'var readline=require("readline");
-var semver=require("semver");
-var rl=readline.createInterface({input:process.stdin,output:process.stdout,terminal:false});
-rl.on("line",function(line){
-  var v=line.replace(/ .*\$/,"");
-  var r=line.replace(/^.* /,"");
-  console.log(semver.satisfies(v,r)?1:0)
-});
-'@;
-    exit;
-}
-
-# Initialize and verify semver channel
-else {
-    $qchannel->writer();
-    $rchannel->reader();
-    $qchannel->autoflush(1);
-    $qchannel->print("1.1.1 ^1.0.0\n");
-    my $v = $rchannel->getline;
-    chomp $v;
-    if ( $v eq '1' ) {
-        $semver = sub {
-            my ( $v, $ref ) = @_;
-            my $res;
-            eval {
-                $qchannel->print("$v $ref\n");
-                $res = $rchannel->getline;
-                chomp $res;
-            };
-            return $res;
-        }
-    }
-    else {
-        print STDERR "No semver, did you install node-semver ?\n";
-    }
-}
+# II - Main
 
 sub debug {
-    print STDERR $_[0] if $opt{debug};
+    print STDERR '# ' . ( OFFSET x ( $_[1] // 0 ) ) . $_[0] . "\n"
+      if $opt{debug};
 }
 
+# Global graph entries
+my @graphEntries;
+
+# hashref getDeps( string: $mod, int: $recursionCount )
+# Get dependencies of $mod module using the result of `npm view` and
+# launches checkMods() with it
+#
+# $mod: module name
+# $recursionCount: recursion count
+# result: dependencies tree
 sub getDeps {
-    my ( $mod, $offset ) = @_;
-    debug "#$offset checking $mod:\n";
-    my $out;
-    spawn(
-        exec => [
-            'npm', 'view', '--json', $mod, 'version', 'name', 'dependencies',
-            ( $opt{dev} ? ('devDependencies') : () )
-        ],
-        nocheck    => 1,
-        wait_child => 1,
-        to_string  => \$out
-    );
-    $opt{dev} = 0;
-    if ($@) {
-        print STDERR "$mod not found\n";
-        return {};
-    }
+    my ( $mod, $recursionCount ) = @_;
+    my $pb = !$recursionCount;
+    push @graphEntries,
+      qq'"$mod" [color=red; peripheries=3; label="' . uc($mod) . '"];'
+      if $pb;
+    $recursionCount //= 0;
+    debug( " checking $mod:", $recursionCount );
     my $res;
-    eval { $res = JSON::from_json($out); };
-    if ($@) {
-        print STDERR "`npm view` returned bad JSON for $mod\n$@";
-        return {};
+
+    # $opt{local} is set to package.json#name if no arg is given
+    $progress->update( message => "checking $mod " ) if $pb and !$opt{np};
+    unless ( $opt{local} ) {
+        my ( $out, $stderr );
+        unless ( $res = $cache->get($mod) ) {
+
+            # Launch `npm view`
+            spawn(
+                exec => [
+                    'npm',          'view', '--json', $mod, 'version', 'name',
+                    'dependencies', 'peerDependencies',
+                    ( ( $opt{dev} and $pb ) ? ('devDependencies') : () )
+                ],
+                nocheck         => 1,
+                wait_child      => 1,
+                to_string       => \$out,
+                error_to_string => \$stderr,
+            );
+            $opt{dev} = 0;
+            if ( $@ or !$out ) {
+                print STDERR "$mod not found\n" . ( $stderr ? $stderr : '' );
+                return {};
+            }
+            eval { $res = JSON::from_json($out); };
+            if ($@) {
+                print STDERR "`npm view` returned bad JSON for $mod\n$@";
+                return {};
+            }
+            $res = pop @{$res} if ref $res eq 'ARRAY';
+        }
+        if ( ref $res ) {
+            $cache->set( $mod, $res, CACHEDELAY );
+        }
+        else { return () }
     }
-    $res = pop @{$res} if ref $res eq 'ARRAY';
-    return () unless ref $res;
-    checkMods( $res, $offset );
+    else {
+        if ( $opt{a} ) {
+            my $cmp = component_list;
+            $cmp->{&main_package} = pjson(&main_package);
+            my $deps = {};
+            foreach ( keys %$cmp ) {
+                $deps->{ pjson($_)->{name} } = pjson($_)->{version} // '*';
+                push @CMP, pjson($_)->{name} . ' (' . pjson($_)->{version} .')';
+            }
+            $res = { dependencies => $deps };
+        }
+        else {
+            $res = $opt{local};
+        }
+        delete $opt{local};
+        delete $res->{devDependencies} unless $opt{dev};
+    }
+    delete $res->{peerDependencies} if $opt{npd};
+    if ($pb) {
+        my $count = 1;
+        foreach my $type (qw(dependencies peerDependencies devDependencies)) {
+            if ( $res->{$type} and %{ $res->{$type} } ) {
+                my @a = keys %{ $res->{$type} };
+                $count += @a;
+            }
+        }
+        $progress->target($count) if !$opt{np};
+    }
+    if ( $recursionCount < $recursionLimit ) {
+        checkMods( $res, $recursionCount );
+    }
+    else {
+        print STDERR "Recursion limit reached\n";
+    }
     delete $res->{name};
     return $res;
 }
 
-my $global  = {};
-my $missing = {};
-my $known   = {};
+# Debian packages
+my $global = {};
 
+# Missing modules
+my $missing = {};
+
+# Already checked module
+my $known = {};
+
+# Workaround for circular dependencies
+my $seen = {};
+
+# Versions of Debian modules (works only for installed packages
+my $debianVersions = {};
+
+# Debian module that mismatch wanted version
+my $mismatch = {};
+
+# void checkMods( hashref: $res, int: $recursionCount )
+# Parse `npm view` result and search for dependencies existing in Debian
+# using local tree and apt/dpkg-query
+# If dependency isn't found in Debian, checkMods() calls getDeps() for it.
+#
+# $res: dependencies tree
+# $recursionCount: recursion count
 sub checkMods {
-    my ( $res, $offset ) = @_;
-    foreach my $f ( 'dependencies', 'devDependencies' ) {
+    my ( $res, $recursionCount ) = @_;
+    my $pb = !$recursionCount;
+    foreach my $f ( 'dependencies', 'peerDependencies', 'devDependencies' ) {
         next unless $res->{$f};
         foreach my $mod ( sort keys %{ $res->{$f} } ) {
             my $want = $res->{$f}->{$mod};
+            $progress->update( message => "checking $mod " )
+              if $pb and !$opt{np};
             if ( $known->{$mod} ) {
                 $global->{ $known->{$mod} }->{$mod}++;
                 $res->{$f}->{$mod} = { global => $known->{$mod} };
-                debug "#$offset  => package: $known->{$mod}\n";
+                debug( "  => package (seen): $known->{$mod}", $recursionCount );
                 next;
             }
             my $path;
+            my $debianVersion;
             foreach (@npaths) {
-                $path = "$_/$mod" if -d "$_/$mod" or -f "$_/$mod.js";
+                if ( -d "$_/$mod" ) {
+                    $path = "$_/$mod";
+                    unless ( $debianVersion = $cache->get("dv-$mod") ) {
+                        $debianVersion = `pkgjs-pjson $path version` if $opt{c};
+                        chomp $debianVersion;
+                        $cache->set( "dv-$mod", $debianVersion, CACHEDELAY );
+                    }
+                    last;
+                }
+                elsif ( -f "$_/$mod.js" ) {
+                    $path = "$_/$mod.js";
+                    last;
+                }
             }
             if ($path) {
-                my $out;
-                spawn(
-                    exec       => [ 'dpkg', '-S', $path ],
-                    wait_child => 1,
-                    to_string  => \$out,
-                    nocheck    => 1
-                );
-                if ($@) {
-                    print STDERR "Fail to find package for $path\n";
-                    $res->{$f}->{$mod} = { global => $path };
+                if ( my $debianPackage = availableModules()->{$mod} ) {
+                    $res->{$f}->{$mod} = { global => $debianPackage };
+
+                    # Check versions if wanted
+                    if ( $opt{c} ) {
+                        unless ( semver( $debianVersion, $want ) ) {
+                            $debianVersions->{$debianPackage} = $debianVersion;
+                            push @{ $mismatch->{$mod} }, $want;
+                        }
+                        debug( "Semver result: "
+                              . semver( $debianVersion, $want ) );
+                    }
+                    $global->{$debianPackage}->{$mod}++;
+                    $known->{$mod} = $debianPackage;
+                    debug( "  => package: $known->{$mod}", $recursionCount );
+                    my $color =
+                      $debianPackage eq $currentPackage ? 'red' : 'blue';
+                    if ( $known->{$mod} eq $currentPackage ) {
+                        debug("$mod is member of current package, continue");
+                        getDeps( $mod . '@' . $want, $recursionCount + 1 );
+                        $color = 'red';
+                    }
+                    push @graphEntries,
+                        qq'"$mod" [color=$color; peripheries=2; label="'
+                      . uc($mod)
+                      . '"];', qq'"$res->{name}" -> "$mod";';
                 }
                 else {
-                    chomp $out;
-                    $out =~ s/:.*$//s;
-                    $res->{$f}->{$mod} = { global => $out };
-                    $global->{$out}->{$mod}++;
-                    $known->{$mod} = $out;
-                    debug "#$offset  => package: $known->{$mod}\n";
+                    print STDERR "Fail to find package for $path\n";
+                    $res->{$f}->{$mod} = { global => $path };
                 }
             }
             else {
                 my $out;
-                spawn(
-                    exec       => [ 'apt-file', 'search', "/nodejs/$mod/" ],
-                    nocheck    => 1,
-                    wait_child => 1,
-                    to_string  => \$out,
-                );
-                if ( !$@ and $out =~ /^(\S+): /s ) {
-                    $res->{$f}->{$mod} = { global => $1 };
-                    $global->{$1}->{$mod}++;
-                    $known->{$mod} = $1;
-                    debug "#$offset  => package: $known->{$mod}\n";
+                if ( my $package = availableModules()->{$mod} ) {
+                    $res->{$f}->{$mod} = { global => $package };
+                    $global->{$package}->{$mod}++;
+                    $known->{$mod} = $package;
+                    debug( "  => package: $known->{$mod} ($currentPackage)",
+                        $recursionCount );
+                    if ( $known->{$mod} eq $currentPackage ) {
+                        debug("$mod is member of current package, continue");
+                        getDeps( $mod . '@' . $want, $recursionCount + 1 );
+                    }
+                    push @graphEntries,
+                        qq'"$mod" [color=blue; peripheries=2; label='
+                      . uc($mod)
+                      . '];', qq'"$res->{name}" -> "$mod";';
+
+                    # Check versions if wanted
+                    if ( $opt{c} ) {
+                        unless ( $debianVersion =
+                            $cache->get("dv-$known->{$mod}") )
+                        {
+                            spawn(
+                                exec => [ 'dpkg-query', '-p', $known->{$mod} ],
+                                wait_child => 1,
+                                to_string  => \$out,
+                            );
+                            die "Unable to get $known->{$mod} version"
+                              unless $out =~ /\nVersion: ([^\s-]+)/s;
+                            $debianVersion = $1;
+                            my $normalizedName =
+                              normalize_name( $known->{$mod} );
+
+                            # Check "Provides" field
+                            if ( $out =~
+/\nProvides:[^\n]*node-$normalizedName\s*\(\s*=\s*(\d[\.\da-zA-Z]*)/s
+                              )
+                            {
+                                $debianVersion = $1;
+                            }
+                            else {
+                                $debianVersion =~ s/\+~.*$//;
+                            }
+                            $cache->set( "dv-$known->{$mod}", $debianVersion,
+                                CACHEDELAY );
+                        }
+                        unless ( semver( $debianVersion, $want ) ) {
+                            $debianVersions->{ $known->{$mod} } =
+                              $debianVersion;
+                            push @{ $mismatch->{$mod} }, $want;
+                        }
+                    }
                 }
                 else {
+                    push @graphEntries, qq'"$res->{name}" -> "$mod";';
                     if ( $missing->{$mod} ) {
                         $res->{$f}->{$mod} =
                           ref $missing->{$mod} ? $missing->{$mod} : {};
@@ -199,10 +359,11 @@ sub checkMods {
                     elsif ( $mod eq $ARGV[0] ) {
                         $res->{$f}->{$mod} = { $want => 1 };
                     }
-                    else {
-                        debug "#$offset  => missing: $mod\n";
+                    elsif ( !$seen->{$mod} ) {
+                        $seen->{$mod}++;
+                        debug( "  => missing: $mod", $recursionCount );
                         $missing->{$mod} = $res->{$f}->{$mod} =
-                          getDeps( $mod . '@' . $want, "  $offset" );
+                          getDeps( $mod . '@' . $want, $recursionCount + 1 );
                         $missing->{$mod}->{$want}++;
                     }
                 }
@@ -212,43 +373,114 @@ sub checkMods {
 }
 
 sub displayMissing {
-    my ( $res, $offset ) = @_;
+    my ( $res, $offset, $graph ) = @_;
     $offset //= '';
-    foreach my $f ( 'dependencies', 'devDependencies' ) {
+    foreach my $f ( 'dependencies', 'peerDependencies', 'devDependencies' ) {
         next unless $res->{$f};
         foreach my $mod ( sort keys %{ $res->{$f} } ) {
+
+            # This is a side effect of circular dependencies,
+            # $res->{$f}->{$mod} might be '*'
+            next unless ( ref $res->{$f}->{$mod} );
             next if $res->{$f}->{$mod}->{global};
+            my $reason = banned($mod);
+            my $suffix = ( $reason ? " # BANNED ($reason)" : '' );
+            my $val    = "$mod ($res->{$f}->{$mod}->{version})$suffix";
             if ( ref $missing->{$mod} ) {
                 $missing->{$mod} = '';
-                print "$offset └── $mod "
-                  . "($res->{$f}->{$mod}->{version})"
-                  . ( $mod =~ $BANNED ? ' # BANNED' : '' ) . "\n";
-                displayMissing( $res->{$f}->{$mod}, "    $offset" )
+                print $graph
+                  ? qq'  "$offset" -> "$val";\n'
+                  : "$offset └── $val\n";
+                displayMissing( $res->{$f}->{$mod},
+                    ( $graph ? $val : "    $offset" ), $graph )
                   if $res->{$f}->{$mod}->{dependencies};
             }
+            #elsif ( not( any { $_ eq $val } @CMP ) ) {
             else {
-                print
-                  "$offset └── (^) $mod ($res->{$f}->{$mod}->{version})"
-                  . ( $mod =~ $BANNED ? ' # BANNED' : '' ) . "\n";
+                print $graph
+                  ? qq'  "$offset" -> "$val";\n'
+                  : "$offset └── (^) $val\n";
             }
         }
     }
 }
 
+my $reason = '';
 $missing->{ $ARGV[0] } = "\@$ARGV[0]";
-my $res = getDeps( $ARGV[0] );
-
-#print STDERR Dumper($res);use Data::Dumper;
-
-if (%$global) {
-    print "DEPENDENCIES:\n";
-    foreach my $mod ( sort keys %$global ) {
-        print "  $mod (" . join( ', ', sort keys %{ $global->{$mod} } ) . ")\n";
-    }
-    print "\n";
+my $mainVersion          = '';
+my $moduleWithVersion    = $ARGV[0];
+my $moduleWithoutVersion = $moduleWithVersion;
+$moduleWithoutVersion =~ s/(.)\@.*$/$1/;
+$currentPackage = availableModules()->{$moduleWithoutVersion} // '';
+if ( $ARGV[0] !~ /.\@.*$/ ) {
+    spawn(
+        exec       => [ 'npm', 'view', '--json', $ARGV[0], 'version', ],
+        nocheck    => 1,
+        wait_child => 1,
+        to_string  => \$mainVersion,
+    );
+    chomp $mainVersion;
+    $mainVersion =~ s/"//g;
+    $moduleWithVersion = "$ARGV[0]\@$mainVersion";
 }
-delete $missing->{ $ARGV[0] };
-if (%$missing) {
-    print "MISSING:\n$ARGV[0]\n";
-    displayMissing($res);
+if ( $opt{graph} ) {
+    getDeps( $ARGV[0] );
+    print qq'digraph "$moduleWithVersion" {\n  rankdir=LR;\n',
+      join( "\n", @graphEntries ), "}\n";
+}
+elsif ( $opt{mg} ) {
+    print qq'digraph "$moduleWithVersion" {\n  rankdir=LR;\n';
+    displayMissing( getDeps( $ARGV[0] ), $moduleWithVersion, 1 );
+
+    # qq'  "$name" -> "$_";\n'
+    print "}\n";
+}
+else {
+    print "# $moduleWithVersion";
+    {
+        my $out;
+        my $module = $ARGV[0];
+        $module =~ s/(.)\@.*$/$1/;
+        $reason = banned($module);
+        print " /!\\ BANNED: $reason" if $reason;
+        if ($currentPackage) {
+            print " ($currentPackage)\n";
+        }
+        else {
+            print "\n";
+        }
+    }
+
+    my $res = getDeps( $ARGV[0] );
+    $progress->finish() if !$opt{np};
+    delete $missing->{ $ARGV[0] };
+
+    if (%$missing) {
+        print '# ' . scalar( keys %$missing ) . " missing npm module(s)\n";
+    }
+
+    if (%$global) {
+        print "DEPENDENCIES:\n";
+        foreach my $mod ( sort keys %$global ) {
+            print "  $mod ("
+              . join( ', ', sort keys %{ $global->{$mod} } ) . ")\n";
+        }
+        print "\n";
+    }
+    delete $missing->{ $ARGV[0] };
+    if (%$missing) {
+        print "MISSING:\n$ARGV[0]"
+          . ( $mainVersion ? "\@$mainVersion"        : '' )
+          . ( $reason      ? " /!\\ BANNED: $reason" : '' ) . "\n";
+        displayMissing($res);
+    }
+    if (%$mismatch) {
+        print "\nWARNING: some version mismatch\n";
+        foreach ( sort keys %$mismatch ) {
+            print "  $_ "
+              . $debianVersions->{ $known->{$_} }
+              . ", wanted: "
+              . join( ', ', @{ $mismatch->{$_} } ) . "\n";
+        }
+    }
 }

@@ -1,0 +1,164 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Debian::Debhelper::Dh_Lib;
+use Debian::PkgJs::Utils;
+use Debian::PkgJs::Version;
+
+use constant UNDEFINED => '__UNDEFINED__';
+
+init();
+
+my @pkgs = grep { /\w/ } getpackages();
+
+# Not needed for sing-binary-package
+exit 0 if @pkgs < 2;
+
+# Get ${nodejs:Provides} value
+my %nodeProvides;
+P: foreach my $pkg (@pkgs) {
+    my $varsFile = "debian/$pkg.substvars";
+    my $f;
+    if ( open $f, $varsFile ) {
+        while (<$f>) {
+            if (s/^nodejs:Provides=//) {
+                %nodeProvides =
+                  map {
+                    s/\s+//g;
+                    /^(.+?)(?:\(=(.+)\))?$/;
+                    ( $1, $2 // UNDEFINED )
+                  } split /,\s+/;
+                close $varsFile;
+                last P;
+            }
+        }
+        close $varsFile;
+    }
+}
+unless (%nodeProvides) {
+    print STDERR "debian/*.substvars not found, unable to generate substvars\n";
+    print STDERR "Did you add an override_dh_auto_install?\n";
+    exit 0;
+}
+
+# Examine only root and main component
+my $rootCmp    = root_components_list();
+my $mainModule = eval { pjson( main_package || '.' ) };
+$mainModule              = $mainModule->{name} if $mainModule;
+$rootCmp->{main_package} = $mainModule         if $mainModule;
+
+foreach my $pkg (@pkgs) {
+    my $varsFile = "debian/$pkg.substvars";
+
+    # Define susbst variable name: camelCase of package name
+    my $varName = lcfirst(
+        join( '',
+            map { ucfirst $_ }
+              split( /(?<=[A-Za-z\d])[^A-Za-z\d]+(?=[A-Za-z\d])|\b/, $pkg ) )
+    ) . ':Provides';
+    my $res = {};
+
+    # Build subsvar content
+  L: foreach ( values %{$rootCmp} ) {
+        my $key = "node-" . normalize_name($_);
+
+        # Don't store value if package name is node-component, else
+        # there will be 2 versions for the same name
+        next L if $key eq $pkg;
+
+        # Store value if component is really installed
+        if ( defined $nodeProvides{$key} ) {
+            $res->{$key} = $nodeProvides{$key} if isInPkg( $pkg, $_ );
+        }
+        else {
+            print STDERR
+"$_ is declared as root component but $key doesn't exist in \${nodejs:Provides}\n";
+        }
+    }
+    my $value = join ', ',
+      map { $res->{$_} eq UNDEFINED ? $_ : "$_ (= $res->{$_})" }
+      sort keys %$res;
+
+    # Store value only if not empty
+    if ($value) {
+        print "Set variable \${$varName} to:\n  $value\n";
+
+        addsubstvar( $pkg, $varName,
+            join( ', ', map { "$_ (= $res->{$_})" } keys %$res ) );
+    }
+}
+my @npaths;
+
+# Little function
+sub isInPkg {
+    my ( $pkg, $name ) = @_;
+    unless (@npaths) {
+        my $multiArch = `dpkg-architecture -q DEB_TARGET_MULTIARCH`;
+        chomp $multiArch;
+        @npaths = (
+            'usr/share/nodejs', 'usr/lib/nodejs', "usr/lib/$multiArch/nodejs"
+        );
+    }
+    my $res = 0;
+    foreach (@npaths) {
+        $res = 1
+
+          # A valid node package is either:
+          if
+
+          # * a directory with a package.(json|yaml)
+          (
+            -d "debian/$pkg/$_/$name"
+            and (  -e "debian/$pkg/$_/$name/package.json"
+                or -e "debian/$pkg/$_/$name/package.yaml" )
+          )
+
+          # * a file or a link named moduleName.js
+          or -f "debian/$pkg/$_/$name.js"
+          or -l "debian/$pkg/$_/$name.js";
+    }
+    return $res;
+}
+__END__
+=pod
+
+=head1 NAME
+
+dh_nodejs_substvars - automatically calculates ${package::Version} substitution
+variable
+
+=head1 SYNOPSIS
+
+Use result in C<debian/control>:
+
+  Source: node-jest
+  Build-Depends: debhelper-compat (= 13)
+   , dh-sequence-nodejs (>= 0.14.5~)
+  
+  Package: jest
+  Provides: ${jest:Provides}
+  
+  Package: node-jest-debbundle
+  Provides: ${nodeJestDebbundle:Version}
+
+=head1 DESCRIPTION
+
+dh-sequence-nodejs automatically adds dh_nodejs_substvars after dh_install step
+when source package provides several binary packages.
+
+This tools dispatches C<${nodejs:Provides}> values in the good package, looking
+at real content.
+
+=head1 SEE ALSO
+
+L<dh-sequence-nodejs(1)>, L<debhelper(7)>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright Yadd E<lt>yadd@debian.orgE<gt>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+
+=cut

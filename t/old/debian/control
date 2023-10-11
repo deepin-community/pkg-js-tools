@@ -8,3 +8,4 @@ Standards-Version: 4.3.0
 Package: foo
 Architecture: all
 Description: Foo
+ Bar

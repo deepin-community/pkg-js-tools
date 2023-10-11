@@ -1,0 +1,305 @@
+.TH "PKG\-JS\-AUTOPKGTEST" "7" "May 2023"
+.SH "NAME"
+\fBpkg-js-autopkgtest\fR \- autopkgtest runner to automatically test Node\.js packages
+.SH SYNOPSIS
+
+.RS 1
+.IP \(bu 2
+in debian/control, insert "Testsuite: autopkgtest\-pkg\-nodejs"
+.IP \(bu 2
+write upstream test in debian/tests/pkg\-js/test (will be launched by
+.br
+\fBsh \-e\fP)
+.IP \(bu 2
+if some other files than "test*" and "debian/tests/test_modules/*"
+.br
+and installed files are needed, write a "debian/tests/pkg\-js/files" with
+.br
+all needed directories/files
+
+.RE
+.P
+That's all, other debian/tests files will be written on\-the\-fly by
+.br
+autodep8 during autopkgtest
+.P
+If you want to launch the same test during build, simply add
+.br
+\fBdh\-sequence\-nodejs\fP in build dependencies
+.SH HOW IT WORKS
+
+.RS 1
+.IP \(bu 2
+if directory \fBdebian/tests/test_modules\fP exists, \fBNODE_PATH\fP will be set
+.br
+to \fBNODE_PATH=debian/tests/test_modules:node_modules\fP
+.IP \(bu 2
+if additional modules were linked during build, they will be linked into
+.br
+\fBnode_module\fP \fI(\fBdebian/nodejs/extlinks\fP)\fR
+.IP \(bu 2
+if additional modules were copies during build, they will be copied into
+.br
+\fBnode_module\fP \fI(\fBdebian/nodejs/extcopies\fP)\fR
+.IP \(bu 2
+if package contains some other components, they will be linked into
+.br
+\fBnode_module\fP
+.IP \(bu 2
+autopkgtest will launch 2 tests:
+.RS 1
+.IP \(bu 2
+a "require" test \fI(see below)\fR
+.IP \(bu 2
+the test defined in debian/tests/pkg\-js/test in a temporary dir (it
+.br
+links installed files)
+
+.RE
+.IP \(bu 2
+if \fBdh\-sequence\-nodejs\fP is a build dependency, \fBdh_auto_test\fP will
+.br
+launch the same test \fI(debian/tests/pkg\-js/test)\fR if exists, else just a
+.br
+\fBnode \-e &quot;require(&#39;\.&#39;)&quot;\fP\|\. Note that you can override test during build
+.br
+using \fBdebian/nodejs/test\fP
+.IP \(bu 2
+if file \fBdebian/tests/pkg\-js/require\-name\fP exists, its content will be used
+.br
+as module name in "require" test \fI(instead of using package\.json value)\fR
+
+.RE
+.SH FULL EXAMPLE
+
+.RS 1
+.IP \(bu 2
+debian/control
+
+.RE
+.RS 2
+.nf
+\|\.\.\.
+Testsuite: autopkgtest\-pkg\-nodejs
+Build\-Depends: dh\-sequence\-nodejs
+\|\.\.\.
+.fi
+.RE
+
+.RS 1
+.IP \(bu 2
+debian/tests/pkg\-js/test
+
+.RE
+.RS 2
+.nf
+mocha \-R spec
+.fi
+.RE
+.SH ADDITIONAL TEST PACKAGES OR TEST RESTRICTIONS
+.P
+autodep8 allows one to add additional packages during autopkgtest (and/or
+.br
+additional restrictions) by using a \fBdebian/tests/autopkgtest\-pkg\-nodejs\.conf\fP
+.br
+file:
+.RS 2
+.nf
+extra_depends=mocha, npm
+extra\-restrictions=needs\-internet
+.fi
+.RE
+.SH ENABLE \fBproto\fR
+.P
+Since version 0\.15\.0, pkg\-js\-autopkgtest launches Node\.js with
+.br
+\fB\-\-disable\-proto=throw\fP\|\. This causes tests to fail if
+.br
+\fBObject\.prototype\.__proto__\fP property is used\.
+.P
+If a package can use this feature without security hole (for test for example),
+.br
+it is possible to disable this nodejs option by creating an empty
+.br
+\fBdebian/tests/pkg\-js/enable_proto\fP file, until Debian's Node\.js enables this
+.br
+feature by default\.
+.SH THE "REQUIRE" TEST
+.SS How it works
+.P
+First, \fBpkg\-js\-autopkgtest\fR searches the module name\.
+
+.RS 1
+.IP \(bu 2
+if \fBdebian/tests/pkg\-js/require\-name\fP exists, its content will be used as
+.br
+module name
+.IP \(bu 2
+else if looks at \fBpackage\.json\fP "name" field:
+.RS 1
+.IP \(bu 2
+if \fBdebian/nodejs/main\fP exists, like \fBdh\-sequence\-nodejs\fR, it uses the
+.br
+\fBpackage\.json\fP from this directory
+.IP \(bu 2
+else it uses \fB\|\./package\.json\fP
+
+.RE
+
+.RE
+.P
+Then \fBpkg\-js\-autopkgtest\fR looks at package\.json fields, not using the file
+.br
+mentioned above, but using the file installed by the Debian package to test
+.br
+\fI(ie \fB/usr/share/nodejs/<module\-name>/package\.json\fP)\fR:
+
+.RS 1
+.IP \(bu 2
+if \fBtype\fR equals \fBmodule\fP, then:
+.RS 1
+.IP \(bu 2
+it builds a \fBnode_modules\fP directory with all available dependencies of
+.br
+the module
+.IP \(bu 2
+it builds a test\.mjs file that tries to import the module to test and
+.br
+launch it
+
+.RE
+.IP \(bu 2
+if \fBmain\fR isn't defined and \fBindex\.js\fP doesn't exist, it skip the test
+.br
+\fI(this avoids to try to test \fB@types/<foo>\fP modules)\fR
+.IP \(bu 2
+else it simply launches a \fBnodejs \-e &quot;require(&#39;$moduleName&#39;)&quot;\fP
+
+.RE
+.P
+Since version 0\.10\.0, \fBpkg\-js\-autopkgtest\fR does the same test for all other
+.br
+modules installed in nodejs root directories \fI(components installed by
+.br
+dh\-sequence\-nodejs using \fBdebian/nodejs/root_modules\fP file)\fR\|\. If one fail, the
+.br
+whole test is marked as failed\.
+.P
+Returned values:
+
+.RS 1
+.IP \(bu 2
+0 if all tests succeed \fI(even if some secondary modules are skipped)\fR
+.IP \(bu 2
+77 if all tests succeed but the main module test was skipped\. This value
+.br
+is used by autopkgtest to report a \fBSKIP\fR instead of a failure\.
+.IP \(bu 2
+else, the number of failure\. Then autopkgtest considers the test as \fBFAIL\fR
+
+.RE
+.SS Customize require test
+.P
+If you want to skip some secondary module tests, simply list them in
+.br
+\fBdebian/tests/pkg\-js/require\-SKIP\fP \fI(one module per line)\fR\|\.
+.P
+If you want to skip the whole "require" test, use this:
+.RS 2
+.nf
+echo require > debian/tests/pkg\-js/SKIP
+.fi
+.RE
+.SH THE MAIN TEST
+.P
+\fBpkg\-js\-autopkgtest\fR uses the same test than \fBdh\-sequence\-nodejs\fR: it
+.br
+launches \fBsh \-ex debian/tests/pkg\-js/test\fP but using the files installed by
+.br
+the Debian package\.
+.SS How main test works
+.P
+\fBpkg\-js\-autopkgtest\fR search for module name using the same way than "require"
+.br
+test\. Then it prepares the test environment:
+
+.RS 1
+.IP \(bu 2
+it creates a temporary directory
+.IP \(bu 2
+it links all files installed in the directory corresponding to module name
+.br
+\fB/usr/share/nodejs/<module\-name>\fP
+.IP \(bu 2
+it creates a \fBnode_modules\fP directory and links into it:
+.RS 1
+.IP \(bu 2
+all modules listed in \fBdebian/nodejs/extlinks\fP
+.IP \(bu 2
+all modules present in \fBdebian/build_modules\fP and \fBdebian/tests/test_modules\fP
+.IP \(bu 2
+all other modules installed by the Debian package in nodejs root directories
+.br
+\fBdebian/nodejs/root_modules\fP
+
+.RE
+.IP \(bu 2
+it copies in \fBnode_modules\fP directory all modules listed in
+.br
+\fBdebian/nodejs/extcopies\fP
+.IP \(bu 2
+if looks at \fBdebian/tests/pkg\-js/files\fP
+.RS 1
+.IP \(bu 2
+if it exists, it copies all files/directories listed in it from source
+.br
+directory to temporary one
+.IP \(bu 2
+else it copies from source directory to temporary one:
+.RS 1
+.IP \(bu 2
+all \fBtest*\fP files
+.IP \(bu 2
+all \fBMakefile\fP like files \fI(rollup\.config\.js, gulpfile\.js,\.\.\. )\fR
+
+.RE
+
+.RE
+
+.RE
+.P
+Then it changes its directory to the temporary one launches the test using
+.br
+\fBsh \-ex debian/tests/pkg\-js/test\fP\|\.
+.SH SEE ALSO
+.P
+pkg\-js\-tools(7), autodep8(1)
+.SH COPYRIGHT AND LICENSE
+.P
+Copyright Yadd <yadd@debian.org>
+.P
+This library is free software; you can redistribute it and/or modify
+.br
+it under the terms of the GNU General Public License as published by
+.br
+the Free Software Foundation; either version 2, or (at your option)
+.br
+any later version\.
+.P
+This program is distributed in the hope that it will be useful,
+.br
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+.br
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE\.  See the
+.br
+GNU General Public License for more details\.
+.P
+On Debian systems, the complete text of version 2 of the GNU General
+.br
+Public License can be found in `/usr/share/common\-licenses/GPL\-2'\.
+.br
+If not, see 
+.UR http://www.gnu.org/licenses/
+.I GNU licenses
+.UE ;
+

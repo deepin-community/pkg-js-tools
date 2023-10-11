@@ -1,0 +1,37 @@
+#!/usr/bin/perl
+
+use strict;
+use Test::More;
+use Dpkg::IPC;
+
+my @tests = (
+
+    # Simple package
+    'abab'    => 'node_modules/abab',
+    '-t abab' => 'node_modules/abab',
+
+    # Module
+    'slice-ansi'    => 'node_modules/slice-ansi',
+    '-t slice-ansi' => 'node_modules/@types/slice-ansi',
+);
+
+plan tests => 3 * scalar(@tests);
+
+foreach ( 0 .. 1 ) {
+    diag 'Retry with existing links' if $_;
+    for ( my $i = 0 ; $i < @tests ; $i += 2 ) {
+        my ( $args, $res ) = ( $tests[$i], $tests[ $i + 1 ] );
+        my ( $out,  $err );
+        spawn(
+            exec            => [ 'pkgjs-ln', split( /\s+/, $args ) ],
+            nocheck         => 1,
+            wait_child      => 1,
+            to_string       => \$out,
+            error_to_string => \$err,
+        );
+        my $status = $?;
+        ok( !$status, 'command succeeded' );
+        ok( -l $res,  "link to $res exists" );
+        ok( $out =~ /(?:linked into node_modules|exists)/, 'Good output' );
+    }
+}

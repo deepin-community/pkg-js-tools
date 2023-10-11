@@ -59,6 +59,9 @@ GetOptions(
 
     # Component tree
     'cmptree|cmp-tree',
+
+    # Component name prefix
+    'p|cmpprefix|cmp-prefix=s',
 );
 $opt{'uscan-option'} = [ '--download-current-version', '-dd' ]
   unless @{ $opt{'uscan-option'} };
@@ -67,6 +70,9 @@ $opt{'uscan-option'} = [ '--download-current-version', '-dd' ]
 $opt{r} = 1 if $0 =~ /del-node-component$/;
 $opt{l} = 1 if $0 =~ /list-node-components$/;
 $opt{m} = 1 if $0 =~ /list-node-modules$/;
+
+$ENV{PKGJS_CMP_PREFIX} = $opt{p} if $opt{p};
+$ENV{PKGJS_CMP_PREFIX} = $opt{p} ? $opt{p} : ( $ENV{PKGJS_CMP_PREFIX} // '' );
 
 # II - USAGE
 if ( $opt{h} or not( @ARGV or $opt{cmptree} or $opt{l} or $opt{m} ) ) {
@@ -89,12 +95,16 @@ Options:
  -r, --remove-component: remove component instead of adding it (default when del-node-component is used)
  -l, --list-components: print components list
  -m, --list-modules: print modules list
+ -p, --cmp-prefix: component name prefix (default: empty)
  --force-npm-reg: force the use of npm registry
  --force-github-tags: force the use of GitHub tags
  --uscan-option: option(s) to pass to uscan (multi-valued). Default: "-dd --download-version"
  --cmp-tree: print a digraph of relation between component (give it to graph-easy)
 
-Copyright (C) 2019 Xavier Guimard <yadd\@debian.org>
+Environments variables:
+ - ANC_CPM_PREFIX: change default --cmp-prefix value
+
+Copyright (C) Yadd <yadd\@debian.org>
 
 Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
 EOF
@@ -148,31 +158,36 @@ my @components_changed;
 # 4 - Case --cmp-tree : print a digraph
 if ( $opt{cmptree} ) {
     require Debian::PkgJs::Npm;
-    my @modNames =
-      map { ( -d $_ and defined pjson($_)->{name} ) ? pjson($_)->{name} : () }
-      ( '.', @cmpnames );
+    my $components = component_list;
+    $components->{&main_package} = pjson(main_package)->{name};
 
     sub deplist {
         my ($cmp) = @_;
         return () unless -d $cmp;
         my $name = pjson($cmp)->{name};
-        my @deps = keys %{ pjson($cmp)->{dependencies} // {} };
+        my @deps = (
+            ( keys %{ pjson($cmp)->{dependencies}     // {} } ),
+            ( keys %{ pjson($cmp)->{peerDependencies} // {} } ),
+        );
         return map {
             my $s = $_;
             ( map { qq'  "$name" -> "$_";\n' } grep { $_ eq $s } @deps )
-        } @modNames;
+        } values %$components;
     }
     my @res;
-    push @res, deplist($_) foreach ( '.', @cmpnames );
-    print qq'digraph "$modNames[0]" {\n  rankdir=LR;\n', @res, "}\n";
+    push @res, deplist($_) foreach ( '.', keys %$components );
+    print 'digraph "' . pjson(main_package) . qq'" {\n  rankdir=LR;\n', @res,
+      "}\n";
 }
 
 # 5 - Remove component (-r or "del-node-domponent")
 elsif ( $opt{r} ) {
     my @tmp = @ARGV;    # Avoid modif by map
     for ( my $i = 0 ; $i < @cmpnames ; $i++ ) {
-        push @components_changed, grep { isEqual( $cmpnames[$i], $_ ) }
-          map { s/[^a-zA-Z0-9]//g; $_ } (@tmp);
+        push @components_changed, map {
+            s/[^a-zA-Z0-9\-]//g;
+            isEqual( $cmpnames[$i], $_ ) ? $cmpnames[$i] : ()
+        } (@tmp);
     }
     my ( $f, $new_watch, $removed_from_watch );
     {
@@ -220,9 +235,8 @@ else {
     # 8.1 - Get real list of new components
     foreach my $cmp (@comp) {
 
-        if ( $cmp =~ $BANNED ) {
-            print STDERR
-"$cmp is banned, see https://salsa.debian.org/js-team/pkg-js-tools/-/blob/master/doc/tools/BANNED.md\n";
+        if ( my $reason = banned($cmp) ) {
+            print STDERR "$cmp is banned: $reason\n";
             push @gitthr, threads->create( sub { -1 } );
             next;
         }
@@ -245,7 +259,7 @@ else {
                 }
             }
         }
-        my $cmpname = normalize_name_strict($cmp);
+        my $cmpname = $ENV{PKGJS_CMP_PREFIX} . normalize_name_strict($cmp);
 
         # Skip already installed components
         if ( grep { isEqual( $cmpname, $_ ) } @cmpnames ) {
@@ -277,7 +291,7 @@ else {
         next if defined $gitlatest and $gitlatest eq -1;
         next if $failed;
         my $check;
-        my $cmpname = normalize_name_strict($cmp);
+        my $cmpname = $ENV{PKGJS_CMP_PREFIX} . normalize_name_strict($cmp);
 
         # Replace GitHub tags by npm registry if needed
         unless ($gitlatest) {
@@ -342,7 +356,7 @@ if (@components_changed) {
         exit 1;
     }
 
-    if ( $opt{g}
+    if ( ( $opt{g} or $opt{c} )
         and not( $watchLines->[0]->type and $watchLines->[0]->type eq 'group' )
       )
     {
@@ -496,6 +510,8 @@ sub getWatchLines {
 sub isEqual {
     my ( $a, $b ) = @_;
     $a =~ s/[^a-zA-Z0-9\-]//g;
+    $a =~ s/^\Q$ENV{PKGJS_CMP_PREFIX}\E//;
+    $b =~ s/^\Q$ENV{PKGJS_CMP_PREFIX}\E//;
     $b =~ s/[^a-zA-Z0-9\-]//g;
     return ( $a eq $b );
 }

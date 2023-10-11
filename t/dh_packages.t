@@ -26,7 +26,10 @@ ok( -e 'packages/comp-one/a', 'build creates packages/comp-one/a' );
 unlink 'packages/comp-one/a';
 
 # Install step
-spawn( exec => [ 'dh_auto_install', '--buildsystem=nodejs' ], wait_child => 1 );
+spawn(
+    exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
+    wait_child => 1
+);
 unlink('comp-one/bar');
 
 foreach (
@@ -56,5 +59,5 @@ foreach (
 }
 
 spawn( exec => [ 'dh_auto_clean', '--buildsystem=nodejs' ], wait_child => 1 );
-spawn( exec => ['dh_clean'], wait_child => 1 );
+spawn( exec => ['dh_clean'],                                wait_child => 1 );
 chdir $pwd;

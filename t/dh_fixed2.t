@@ -6,7 +6,11 @@ chdir "t/fixed2";
 spawn( exec => [ 'dh_auto_test', '--buildsystem=nodejs' ], wait_child => 1 );
 ok( -e 'foo', 'File "foo" created' ) or diag `ls -l`;
 unlink('foo');
-spawn( exec => [ 'dh_auto_install', '--buildsystem=nodejs' ], wait_child => 1 );
+spawn(
+    exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
+    wait_child => 1
+);
+
 foreach (
     qw(
     debian/foo/usr/share/nodejs/foo/package.json
@@ -21,5 +25,5 @@ foreach (
     ok( -f $_, "$_ installed" );
 }
 spawn( exec => [ 'dh_auto_clean', '--buildsystem=nodejs' ], wait_child => 1 );
-spawn( exec => ['dh_clean'], wait_child => 1 );
+spawn( exec => ['dh_clean'],                                wait_child => 1 );
 chdir $pwd;

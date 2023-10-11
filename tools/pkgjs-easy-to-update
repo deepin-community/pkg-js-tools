@@ -1,0 +1,175 @@
+#!/usr/bin/perl
+
+use strict;
+use Debian::PkgJs::Banned;
+use Debian::PkgJs::Cache;
+use Debian::PkgJs::Dependencies;
+use Debian::PkgJs::Version;
+use Dpkg::IPC;
+use File::Temp 'tempdir';
+use Getopt::Long;
+use JSON;
+use LWP::UserAgent;
+use Regexp::Assemble;
+
+my $ra = Regexp::Assemble->new;
+map { $ra->add($_) } ( keys %{$Debian::PkgJs::Banned::BANNED} ), qw(ws-iconv);
+my $BANNED = '^' . $ra->as_string . '$';
+$BANNED = qr/$BANNED/;
+our $cache = Debian::PkgJs::Cache->new;
+
+my $content;
+my $ua = LWP::UserAgent->new( timeout => 10 );
+$ua->env_proxy;
+my $dir = tempdir();# CLEANUP => 1 );
+my %opt;
+
+# 1 - Get options
+GetOptions(
+    \%opt, qw(
+      h|help
+      v|version
+      a|audit
+    )
+);
+
+if ( $opt{h} ) {
+    print <<EOF;
+Usage: pkgjs-easy-to-update
+
+Display package easy to update with new version.
+
+Options:
+ -h, --help: print this
+ -a, --audit: launch a `npm audit` instead of searching packages to update
+
+Note that --audit produces many false positive errors.
+EOF
+    exit;
+}
+elsif ( $opt{v} ) {
+    print "$VERSION\n";
+    exit;
+}
+
+print STDERR "Be patient, this process can take a long time.\n";
+# 2 - Get list of package with a new version from UDD
+{
+    my $response = $ua->get('https://udd.debian.org/dmd/?email1=pkg-javascript-devel%40lists.alioth.debian.org&format=json');
+    if ( $response->is_success ) {
+        $content = JSON::from_json($response->decoded_content);
+    }
+    else {
+        die "Unable to get list from udd.debian.org: ".$response->status_line;
+    }
+}
+print STDERR "Got UDD list, building package.json\n";
+chdir $dir;
+
+# 3 - Parse result to build a temporary package.json
+
+my $count    = 0;
+my @toUpdate = map {
+    my $name = $_->{':source'};
+    $name =~ s/^node-//;
+    my $version = fixVersion( $_->{':details'} );
+    availableModules->{$name} && defined( $_->{':details'} )
+      ? {
+        source => $_->{':source'},
+        name   => $name,
+        new    => $version,
+        old    => getVersion( $_->{':source'} ),
+      }
+      : ();
+  }
+  grep {
+    #$count++ if $_->{':type'} eq "new upstream";
+    my $source = $_->{':source'};
+    $source =~ s/^(?:node|libjs)-//;
+    $_->{':type'} eq "new upstream"
+      and $source !~ $BANNED
+
+      #and $count < 20
+  } @$content;
+
+my $fh;
+
+# 4 - Build package-lock.json using npm
+print STDERR "Got unstable versions, building package-lock.json\n";
+while (1) {
+    open $fh, '>', 'package.json' or die $!;
+    print $fh '{"name":"foo","version":"0.1","dependencies":{';
+    print $fh join( ',',
+        map { qq("$_->{name}":"^$_->{old}") }
+        grep { defined $_->{old} } @toUpdate );
+    print $fh '}}';
+    close $fh;
+
+    my $stderr;
+    spawn(
+        exec =>
+          [qw(npm i --package-lock-only --legacy-peer-deps --ignore-scripts)],
+        wait_child      => 1,
+        nocheck         => 1,
+        error_to_string => \$stderr,
+    );
+    if ( $stderr =~ /No matching version found for (.*?)\@/s ) {
+        my $drop = $1;
+        print STDERR "Drop $drop, compatible version no more available\n";
+        @toUpdate = grep { $_->{name} ne $drop } @toUpdate;
+        next;
+    }
+    print STDERR $stderr if $stderr;
+    last;
+}
+
+if ( $opt{a} ) {
+    spawn(
+        exec       => [ qw(npm audit --package-lock-only --ignore-scripts --json) ],
+        wait_child => 1,
+    );
+    exit;
+}
+
+# 5 - Parse package-lock.json result and search for easy to update
+{
+    local $/ = undef;
+    open $fh, 'package-lock.json' or die $!;
+    $content = JSON::from_json(<$fh>);
+    close $fh;
+}
+
+foreach my $pkg (@toUpdate) {
+    my $newVersion =
+      $content->{packages}->{"node_modules/$pkg->{name}"}->{version};
+    my $oldVersion = fixVersion( $pkg->{old} );
+    if ( $newVersion ne $oldVersion ) {
+        print "$pkg->{source}: from $oldVersion to $newVersion\n";
+    }
+}
+
+sub getVersion {
+    my $src = shift;
+    if ( my $version = $cache->get("version-$src") ) {
+        return $version;
+    }
+    my $response = $ua->get(
+        'https://api.ftp-master.debian.org/madison?text=on&s=sid&package='
+          . $src );
+    if ( $response->is_success ) {
+        my @vals = split /\s*\|\s*/, $response->decoded_content;
+        my $v    = fixVersion( $vals[1] );
+        $cache->set( "version-$src", $v );
+        return $v;
+    }
+    else {
+        return undef;
+    }
+}
+
+sub fixVersion {
+    my $v = shift;
+    $v =~ s/[^\d\.].*$//;
+    $v =~ s/^(\d+\.\d+\.\d+).*$/$1/;
+    return $v;
+}

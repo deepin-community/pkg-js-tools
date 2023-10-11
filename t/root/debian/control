@@ -9,3 +9,4 @@ Package: foo
 Provides: ${nodejs:Provides}
 Architecture: all
 Description: Foo
+ Bar

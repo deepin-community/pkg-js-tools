@@ -1,0 +1,67 @@
+#!/bin/bash
+
+TARGET=$1
+
+function usage() {
+	cat <<EOT
+Usage: pkgjs-run <target>
+
+Launch script defined in "package.json -> scripts -> <target>" using sh like
+a "npm run".
+
+Features:
+ - add node_modules/.bin in PATH
+ - ignore git, husky, sudo and su commands
+ - replace all "npm run" by pkgjs-run
+ - replace all "npm install" by pkgjs-install --ignore --no-download
+EOT
+}
+
+if test "$TARGET" = ""; then
+	usage
+	exit 1
+fi
+if test "$1" = "--help" || test "$1" = "-h"; then
+	usage
+	exit
+fi
+if test "$1" = "--version"; then
+    perl -MDebian::PkgJs::Version -le 'print $VERSION'
+    exit
+fi
+
+COMMAND=`pkgjs-pjson . scripts $TARGET|perl -pe 's/\bp?npm\s+run\b/pkgjs-run/g;s/\blerna\s+run\b/pkgjs-lerna run/g;s/\bp?npm\s+install\b/pkgjs-install --ignore --no-download/g'`
+if test "$COMMAND" = ""; then
+	echo "Target $TARGET is not defined in package.json" >&2
+	exit 1
+fi
+
+# Fake git / husky
+BADCOMMANDS="git husky su sudo"
+mkdir -p node_modules/.bin || true
+for command in $BADCOMMANDS; do
+	rm -f node_modules/.bin/$command
+	ln -s /usr/bin/true node_modules/.bin/$command
+done
+
+# Aliases
+ALIASES="babel,/usr/bin/babeljs"
+for pair in $ALIASES; do
+	rm -f node_modules/.bin/${pair%,*}
+	ln -s ${pair#*,} node_modules/.bin/${pair%,*}
+done
+
+# Main: launch wanted command
+export PATH="node_modules/.bin:$PATH"
+CODE=0
+sh -c "KEEP_COMMAND_LINKS=1 $COMMAND" || CODE=$?
+
+# Clean our stuff
+if test "$KEEP_COMMAND_LINKS" = ""; then
+	for command in $BADCOMMANDS; do
+		rm -f node_modules/.bin/$command
+	done
+	rmdir node_modules/.bin 2>/dev/null || true
+	rmdir node_modules 2>/dev/null || true
+fi
+exit $CODE

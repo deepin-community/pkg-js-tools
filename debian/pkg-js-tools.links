@@ -1,12 +1,1 @@
-usr/share/man/man1/add-node-component.1.gz	usr/share/man/man1/del-node-component.1.gz
-usr/share/man/man1/add-node-component.1.gz	usr/share/man/man1/list-node-components.1.gz
-usr/share/man/man1/add-node-component.1.gz	usr/share/man/man1/list-node-modules.1.gz
-usr/share/man/man1/pkgjs-utils.1p.gz		usr/share/man/man1/pkgjs-ln.1p.gz
-usr/share/man/man1/pkgjs-utils.1p.gz		usr/share/man/man1/pkgjs-main.1p.gz
-usr/share/man/man1/pkgjs-utils.1p.gz		usr/share/man/man1/pkgjs-pjson.1p.gz
-usr/bin/add-node-component	usr/bin/del-node-component
-usr/bin/add-node-component	usr/bin/list-node-components
-usr/bin/add-node-component	usr/bin/list-node-modules
-usr/bin/pkgjs-utils	usr/bin/pkgjs-ln
-usr/bin/pkgjs-utils	usr/bin/pkgjs-main
-usr/bin/pkgjs-utils	usr/bin/pkgjs-pjson
+usr/share/man/man7/pkg-js-tools.7.gz	usr/share/man/man7/dh-sequence-nodejs.7.gz

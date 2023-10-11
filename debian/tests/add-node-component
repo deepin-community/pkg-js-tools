@@ -1,0 +1,73 @@
+#!/usr/bin/perl
+
+use strict;
+use Test::More;
+use Dpkg::IPC;
+use File::Copy::Recursive 'dircopy';
+use File::Path 'remove_tree';
+
+# Prepare tree
+remove_tree('test');
+ok( dircopy( 't/simple', 'test' ), 'Test directory created' );
+chdir 'test';
+my $out;
+
+# Main test
+spawn(
+    exec            => [qw(add-node-component abab)],
+    nocheck         => 1,
+    wait_child      => 1,
+    error_to_string => \$out,
+);
+if ($?) {
+    fail "add-node-component failed: $out";
+}
+else {
+    ok( $out =~ /Components added: abab/s, 'It displays result' );
+    ok( -e 'debian/gbp.conf',              'gbp.conf created' );
+    ok( foundStringInFile( 'component\s*=.*abab', 'debian/gbp.conf' ),
+        'Component added in debian/gbp.conf' );
+    ok( foundStringInFile( 'component=abab', 'debian/watch' ),
+        'Component added in debian/watch' );
+    ok( foundStringInFile( 'https?://.*abab', 'debian/copyright' ),
+        'Component source added in debian/copyright' );
+    spawn(
+        exec            => [qw(del-node-component abab)],
+        nocheck         => 1,
+        wait_child      => 1,
+        error_to_string => \$out,
+    );
+    ok( !foundStringInFile( 'component\s*=.*abab', 'debian/gbp.conf' ),
+        'Component deleted from debian/gbp.conf' );
+    ok( !foundStringInFile( 'component=abab', 'debian/watch' ),
+        'Component deleted from debian/watch' );
+}
+
+# Banned test
+spawn(
+    exec            => [qw(add-node-component cross-spawn)],
+    nocheck         => 1,
+    wait_child      => 1,
+    error_to_string => \$out,
+);
+ok( $out =~ /cross-spawn.*banned/m, 'It detects that cross-spawn is banned' );
+ok( !foundStringInFile( 'component\s*=.*cross-spawn', 'debian/gbp.conf' ),
+    'cross-spawn not added in debian/gbp.conf' );
+ok( !foundStringInFile( 'component=abab', 'debian/watch' ),
+    'cross-spawn not added in debian/watch' );
+
+chdir('..');
+remove_tree('test');
+done_testing();
+
+sub foundStringInFile {
+    my ( $string, $file ) = @_;
+    my $f;
+    open( $f, '<', $file ) or fail($!);
+    my $found = 0;
+    while (<$f>) {
+        $found = 1 if /$string/;
+    }
+    close $f;
+    return $found;
+}

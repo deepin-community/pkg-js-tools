@@ -1,0 +1,13 @@
+dh_nodejs/npmignore.default	usr/share/pkg-js-tools/
+mjs2cjs/*.mjs	usr/share/pkg-js-tools/
+usr/bin/add-node-component
+usr/bin/dh_nodejs_*
+usr/bin/mjs2cjs
+usr/bin/nodepath
+usr/bin/pkgjs-install-minimal
+usr/bin/pkgjs-lerna
+usr/bin/pkgjs-run
+usr/bin/pkgjs-utils
+usr/share/man/man1/*
+usr/share/man/man3/*
+usr/share/perl5/

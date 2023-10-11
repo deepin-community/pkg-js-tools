@@ -1,9 +1,1 @@
-cross-spawn
-gdal
-gyp-build
-groove
-lodash-compat
-request
-request-promise-core
-simple-is
-stringprep
+# Embedded in lib/Debian/PkgJs/Banned.pm

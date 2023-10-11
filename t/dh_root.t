@@ -4,7 +4,10 @@ use Dpkg::IPC;
 my $pwd = `pwd`;
 chdir 't/root';
 spawn( exec => ['dh_prep'], wait_child => 1 );
-spawn( exec => [ 'dh_auto_install', '--buildsystem=nodejs' ], wait_child => 1 );
+spawn(
+    exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
+    wait_child => 1
+);
 
 for my $c ('comp_two') {
     ok( !-d "debian/foo/usr/share/nodejs/foo/node_modules/$c",
@@ -29,5 +32,5 @@ if ( ok( -e 'debian/foo/DEBIAN/control', 'control generated' ) ) {
 }
 
 spawn( exec => [ 'dh_auto_clean', '--buildsystem=nodejs' ], wait_child => 1 );
-spawn( exec => ['dh_clean'], wait_child => 1 );
+spawn( exec => ['dh_clean'],                                wait_child => 1 );
 chdir $pwd;

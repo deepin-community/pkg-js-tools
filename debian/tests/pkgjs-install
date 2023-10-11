@@ -1,0 +1,43 @@
+#!/usr/bin/perl
+
+use strict;
+use Test::More;
+use Dpkg::IPC;
+
+my $out;
+chdir 't/simple';
+spawn(
+    exec            => [qw(apt-file update)],
+    nocheck         => 1,
+    wait_child      => 1,
+    error_to_string => \$out,
+);
+if ($?) {
+    diag "apt-file update failed";
+}
+spawn(
+    exec       => ['pkgjs-install'],
+    nocheck    => 1,
+    wait_child => 1,
+    to_string  => \$out,
+);
+
+if ($?) {
+    fail "pkgjs-install failed";
+}
+ok( -d 'node_modules',       'node_modules created' );
+ok( -l 'node_modules/chalk', 'chalk linked' );
+ok( readlink('node_modules/chalk') eq '/usr/share/nodejs/chalk',
+    'good chalk link' );
+ok( -d 'node_modules/@mdn', 'node_modules/@mdn created' );
+ok(
+    -l 'node_modules/@mdn/browser-compat-data',
+    '@mdn/browser-compat-data linked'
+);
+ok(
+    readlink('node_modules/@mdn/browser-compat-data') eq
+      '/usr/share/nodejs/@mdn/browser-compat-data',
+    'good @mdn/browser-compat-data link'
+);
+
+done_testing();

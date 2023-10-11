@@ -1,0 +1,44 @@
+#!/bin/bash
+
+set -e
+
+function usage()
+{
+cat <<EOF
+Usage: pkgjs-lerna run <command>
+
+pkgjs-lerna acts as lerna.
+
+Copyright (C) Yadd <yadd@debian.org>
+
+Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
+EOF
+}
+
+if test "$1" = "--version" -o "$1" = "-v"; then
+	echo `perl -MDebian::PkgJs::Version -e 'print $VERSION'`
+	exit
+fi
+
+if test "$1" = "--help" -o "$1" = "-h"; then
+	usage
+	exit
+fi
+
+if test "$1" != run; then
+	echo 'Only "run" command is implemented' >&2
+	usage
+	exit 1
+fi
+
+shift
+
+ORDER=`pkgjs-utils ordered_components_list`
+
+for cmp in $ORDER; do
+	(
+		cd $cmp
+		echo "# $cmp"
+		pkgjs-run "$@"
+	)
+done

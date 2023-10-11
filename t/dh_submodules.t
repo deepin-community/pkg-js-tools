@@ -29,7 +29,10 @@ ok( -e 'foo', 'File "foo" created' ) or diag `ls -l`;
 unlink('foo');
 
 # Install step
-spawn( exec => [ 'dh_auto_install', '--buildsystem=nodejs' ], wait_child => 1 );
+spawn(
+    exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
+    wait_child => 1
+);
 unlink('comp-one/bar');
 
 foreach (
@@ -51,9 +54,10 @@ foreach (
     ok( -f $_, "$_ installed" );
 }
 foreach (qw(one two four)) {
-    open my $f, "debian/foo/usr/share/nodejs/foo/node_modules/comp-$_/index.js" or next;
+    open my $f, "debian/foo/usr/share/nodejs/foo/node_modules/comp-$_/index.js"
+      or next;
     my $line = <$f>;
-    ok($line =~ /$_/, "index.js is good") or diag "$_: $line";
+    ok( $line =~ /$_/, "index.js is good" ) or diag "$_: $line";
     close $f;
 }
 foreach (
@@ -71,7 +75,7 @@ print F 'z';
 close F;
 
 spawn( exec => [ 'dh_auto_clean', '--buildsystem=nodejs' ], wait_child => 1 );
-spawn( exec => ['dh_clean'], wait_child => 1 );
+spawn( exec => ['dh_clean'],                                wait_child => 1 );
 ok( ( !-e 'node_modules/.cache/foo' and !-e 'node_modules/.cache' ),
     'Cache deleted' );
 chdir $pwd;

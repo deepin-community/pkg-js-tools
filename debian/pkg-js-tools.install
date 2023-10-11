@@ -1,8 +1,13 @@
-dh_nodejs/npmignore.default	usr/share/pkg-js-tools/
 lintian/checks/*	usr/share/lintian/checks/
 lintian/profiles/*	usr/share/lintian/profiles/
 lintian/tags/*          usr/share/lintian/tags/pkg-js/
 pkg-js-salsa.conf	usr/share/pkg-js-tools/
-usr/bin/
-usr/share/perl5/
-usr/share/man/man1/*.1p
+usr/bin/debcheck-node-repo
+usr/bin/dh-make-node
+usr/bin/getFromNpmCache
+usr/bin/github-debian-upstream
+usr/bin/pkgjs-audit
+usr/bin/pkgjs-depends
+usr/bin/pkgjs-easy-to-update
+usr/bin/pkgjs-install
+usr/bin/pkgjs-ls

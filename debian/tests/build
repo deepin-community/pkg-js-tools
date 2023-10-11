@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+export HOME=$AUTOPKGTEST_TMP
+for DPATH in t/*/debian/; do
+	(echo "trying to build "${DPATH%/debian/}
+	cd ${DPATH%/debian/}
+	dpkg-buildpackage --no-sign)
+done

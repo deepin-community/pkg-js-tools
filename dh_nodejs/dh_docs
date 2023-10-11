@@ -1,0 +1,13 @@
+authors?
+authors?\.md
+authors?\.txt
+code_of_conduct\.md
+contributing\.md
+maintaining\.md
+notice
+notice\.txt
+readme
+readme.*\.txt
+readme.*\.md
+readme.*\.markdown
+security\.md

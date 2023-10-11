@@ -1,0 +1,52 @@
+#!/usr/bin/perl
+
+use strict;
+use Test::More;
+use Dpkg::IPC;
+
+my @tests = (
+
+    # Simple package
+    'abab'    => '/usr/share/nodejs/abab',
+    '-p abab' => 'node-abab: /usr/share/nodejs/abab',
+    '-o abab' => 'node-abab',
+
+    # Module
+    'slice-ansi'    => '/usr/share/nodejs/slice-ansi',
+    '-p slice-ansi' => 'node-slice-ansi: /usr/share/nodejs/slice-ansi',
+    '@mdn/browser-compat-data' => '/usr/share/nodejs/@mdn/browser-compat-data',
+    '-o @mdn/browser-compat-data' => 'node-mdn-browser-compat-data',
+
+    # Typescript types
+    '@types/node' => '/usr/share/nodejs/@types/node',
+
+    # Unexistent
+    '@types/_zz' => 'STDERR:Not found',
+);
+
+plan tests => scalar @tests;
+
+for ( my $i = 0 ; $i < @tests ; $i += 2 ) {
+    my ( $args, $res ) = ( $tests[$i], $tests[ $i + 1 ] );
+    my ( $out,  $err );
+    spawn(
+        exec            => [ 'nodepath', split( /\s+/, $args ) ],
+        nocheck         => 1,
+        wait_child      => 1,
+        to_string       => \$out,
+        error_to_string => \$err,
+    );
+    my $status = $?;
+    chomp $out;
+    chomp $err;
+    if ( $res =~ s/STDERR:// ) {
+        ok( $status,      "'nodepath $args' failed" );
+        ok( $err eq $res, "error matches: $res" )
+          or diag "Received: \n OUT: $out\n ERR: $err";
+    }
+    else {
+        ok( !$status,     "'nodepath $args' succeeded" );
+        ok( $out eq $res, "result matches: $res" )
+          or diag "Received: \n OUT: $out\n ERR: $err";
+    }
+}

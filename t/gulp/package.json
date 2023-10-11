@@ -4,6 +4,9 @@
   "devDependencies": {
     "gulp": "latest"
   },
+  "scripts": {
+    "build": "gulp def"
+  },
   "files": ["dist"],
   "main": "dist"
 }
