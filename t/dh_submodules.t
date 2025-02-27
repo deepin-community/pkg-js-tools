@@ -30,7 +30,7 @@ unlink('foo');
 
 # Install step
 spawn(
-    exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
+    exec       => [ 'dh_auto_install', '--buildsystem=nodejs' ],
     wait_child => 1
 );
 unlink('comp-one/bar');

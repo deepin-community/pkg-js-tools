@@ -11,6 +11,6 @@ modules
 
 ## Copyright
 
-Copyright: 2019, Xavier Guimard <yadd@debian.org>
+Copyright: Xavier Guimard <yadd@debian.org>
 
 License: GPL-2+

@@ -1,3 +1,77 @@
+pkg-js-tools (0.15.23) unstable; urgency=medium
+
+  * Team upload
+  * Set TAP_TIMEOUT to 0 (no timeout), and depends on autopkgtest
+    timeout instead.
+
+ -- Bastien Roucariès <rouca@debian.org>  Mon, 05 Aug 2024 10:05:22 +0000
+
+pkg-js-tools (0.15.22) unstable; urgency=medium
+
+  * pkgjs-run: use new pkgjs in aliases
+  * debhelper: don't launch more than allowed processes when building
+    pkgjs-lock
+  * dh-nodejs: add dependency to libfile-which-perl
+  * Bug #1076904:
+    * Add build dependencies to libdpkg-perl and libwww-perl to well build
+      manpages when NOCHECK
+    * Fix version in help2man
+    * Set DEVSCRIPTS_CHECK_DIRNAME_LEVEL=0 when building pkgjs-run manpage
+  * Update debian/rules to build manpage during build step
+
+ -- Yadd <yadd@debian.org>  Sat, 27 Jul 2024 09:04:13 +0400
+
+pkg-js-tools (0.15.21) unstable; urgency=medium
+
+  * Add command pkgjs
+    (simple wrapper to replace yarn during Debian package build)
+  * Clean debian/rules (drop useless fields)
+
+ -- Yadd <yadd@debian.org>  Tue, 04 Jun 2024 11:30:18 +0400
+
+pkg-js-tools (0.15.20) unstable; urgency=medium
+
+  [ Jérémy Lal ]
+  * nodepath: pass integer to process.exit. Closes: #1071213
+
+ -- Yadd <yadd@debian.org>  Thu, 16 May 2024 13:59:58 +0400
+
+pkg-js-tools (0.15.19) unstable; urgency=medium
+
+  * pkgjs-run:
+    + add --if-exist option
+    + replace yarn and cross-env
+    + expose ALIASES and BADCOMMANDS env vars
+    + fix --version and --help
+
+ -- Yadd <yadd@debian.org>  Mon, 22 Apr 2024 08:43:39 +0400
+
+pkg-js-tools (0.15.18) unstable; urgency=medium
+
+  * pkgjs-run: same output than `npm run`
+  * dh-nodejs: provides dh-nodejs-autodocs (Closes: #1055346)
+  * debhelper: restore package.json if mjs2cjs modified it (Closes: #1046772)
+
+ -- Yadd <yadd@debian.org>  Tue, 09 Jan 2024 17:05:17 +0400
+
+pkg-js-tools (0.15.17) unstable; urgency=medium
+
+  * Drop test dependency to fakeroot by using Rules-Require-Root:no.
+    Thanks to Niels Thykier! (Closes: #1059565)
+
+ -- Yadd <yadd@debian.org>  Thu, 28 Dec 2023 19:36:34 +0400
+
+pkg-js-tools (0.15.16) unstable; urgency=medium
+
+  * pkgjs-run: keep arguments after --
+  * debhelper:
+    + add esbuild in webpack (to generate pkg-js.lock)
+  * Update standards version to 4.6.2, no changes needed.
+  * Update test dependencies: replace devscripts by fakeroot
+    (Closes: #1059565)
+
+ -- Yadd <yadd@debian.org>  Thu, 28 Dec 2023 17:54:01 +0400
+
 pkg-js-tools (0.15.15) unstable; urgency=medium
 
   * debhelper:

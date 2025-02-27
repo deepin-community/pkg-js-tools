@@ -56,7 +56,7 @@ Options:
  --prod: don't install dev dependencies
  --all: don't remove sub-dependencies of Debian packages (link them and install wanted dependencies)
  --strict: download JS module if Debian version mismatch (using semver)
- --no-package-lock: calculate dependencies without npm, implies --no-download. This permits to use pkgjs-install without network connection
+ --no-package-lock: calculate dependencies without npm, implies --no-download. This permits one to use pkgjs-install without network connection
  --audit: don't install or download anything, just print result
  --no-download: only links available JS modules, don't download anything
 EOF

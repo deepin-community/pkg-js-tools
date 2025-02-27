@@ -5,7 +5,7 @@ my $pwd = `pwd`;
 chdir 't/root';
 spawn( exec => ['dh_prep'], wait_child => 1 );
 spawn(
-    exec       => [ 'fakeroot', 'dh_auto_install', '--buildsystem=nodejs' ],
+    exec       => [ 'dh_auto_install', '--buildsystem=nodejs' ],
     wait_child => 1
 );
 
@@ -23,7 +23,8 @@ for my $c ( 'comp-one', 'comp-three' ) {
     );
 }
 
-spawn( exec => [ 'fakeroot', 'dh_gencontrol' ], wait_child => 1 );
+$ENV{DEB_RULES_REQUIRES_ROOT} = 'no';
+spawn( exec => [ 'dh_gencontrol' ], wait_child => 1 );
 if ( ok( -e 'debian/foo/DEBIAN/control', 'control generated' ) ) {
     my $f;
     open $f, 'debian/foo/DEBIAN/control';

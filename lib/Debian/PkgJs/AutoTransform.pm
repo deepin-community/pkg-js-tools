@@ -12,6 +12,7 @@ use constant BUNDLE => './dhnodejsBundle.cjs';
 our @EXPORT = ('run');
 
 sub run {
+    copy('package.json', '.mjs2cjs-package.json');
     my $pkg = pjson(main_package) or die 'Unable to open package.json';
     die "Package isn't 'type:module', aborting"
       unless $pkg->{type} eq 'module';

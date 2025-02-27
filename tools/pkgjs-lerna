@@ -39,6 +39,6 @@ for cmp in $ORDER; do
 	(
 		cd $cmp
 		echo "# $cmp"
-		pkgjs-run "$@"
+		pkgjs-run --if-exist "$@"
 	)
 done

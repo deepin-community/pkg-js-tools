@@ -476,7 +476,7 @@ EOF
                 "$path/$_->[0]/" );
         }
     }
-    buildPackageLock( $dir, "$path/pkgjs-lock.json", 1 );
+    buildPackageLock( $dir, "$path/pkgjs-lock.json", 1, $self->get_parallel );
 }
 
 sub filesFieldToList {
@@ -782,7 +782,7 @@ EOT
             addsubstvar( $pkg, 'nodejs:Provides', join( ', ', @provides ) );
         }
     }
-    if ( my $_builtUsing = builtUsing() ) {
+    if ( my $_builtUsing = builtUsing( $self->get_parallel ) ) {
         foreach my $pkg (@pkgs) {
             addsubstvar( $pkg, 'nodejs:BuiltUsing', $_builtUsing );
         }
@@ -846,6 +846,17 @@ sub clean {
     clean_internal_modules;
     clean_build_modules();
     clean_test_modules();
+
+    # Restore package.json if mjs2cjs modified it
+    if ( -e '.mjs2cjs-package.json' ) {
+        print "Restoring package.json modified by mjs2cjs\n";
+        unlink 'package.json';
+        rename '.mjs2cjs-package.json', 'package.json';
+        if ( -e 'debian/index.cjs' ) {
+            print "Delete index.cjs\n";
+            unlink 'index.cjs';
+        }
+    }
 
     # Clean test link
     if ( my $p = $self->main_package ) {

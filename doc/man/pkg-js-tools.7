@@ -1,4 +1,4 @@
-.TH "PKG\-JS\-TOOLS" "7" "May 2023"
+.TH "PKG\-JS\-TOOLS" "7" "June 2024"
 .SH "NAME"
 \fBpkg-js-tools\fR \- collection of tools to aid packaging Node modules in Debian\.
 .SH WORKING WITH SALSA\.DEBIAN\.ORG REPOSITORY
@@ -498,17 +498,8 @@ destination not starting with \fB/\fP are related to arch path
 .RE
 
 .RE
-.TS
-tab(|) nowarn;
-cx.
-T{
 .P
-To install a component in another directory, set its files in
-.br
-\fBdebian/install\fR\|\.
-
-T}
-.TE
+\fBNB\fR: To install a component in another directory, set its files in \fBdebian/install\fR\|\.
 .P
 Example:
 
@@ -735,7 +726,9 @@ Debian modules\. It is included in dh\-nodejs so can be used during build
 .IP \(bu 2
 \fBpkgjs\-utils\fR, \fBpkgjs\-ln\fR, \fBpkgjs\-main\fR, \fBpkgjs\-pjson\fR: various
 .br
-utilities\. See \fBpkgjs\-utils(1)\fP manpage\.
+utilities\. See \fBpkgjs\-utils(1)\fP manpage
+.IP \(bu 2
+\fBpkgjs\fR: try to reproduce \fByarnpkg(1)\fP commands with \fBpkgjs\-*\fP scripts\.
 
 .RE
 .SH SEE ALSO
@@ -819,6 +812,12 @@ T{
 mjs2cjs \-a
 T}|T{
 0\.14\.14
+T}
+_
+T{
+pkgjs
+T}|T{
+0\.15\.21
 T}
 _
 T{

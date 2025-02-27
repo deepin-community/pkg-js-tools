@@ -4,6 +4,7 @@ Section: devel
 Priority: optional
 Build-Depends: debhelper (>= 11~),
 Standards-Version: 4.3.0
+Rules-Requires-Root: no
 
 Package: foo
 Architecture: all
