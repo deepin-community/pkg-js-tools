@@ -4,6 +4,7 @@ usr/bin/add-node-component
 usr/bin/dh_nodejs_*
 usr/bin/mjs2cjs
 usr/bin/nodepath
+usr/bin/pkgjs
 usr/bin/pkgjs-install-minimal
 usr/bin/pkgjs-lerna
 usr/bin/pkgjs-run

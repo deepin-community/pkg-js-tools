@@ -9,6 +9,10 @@ if [ -e debian/tests/pkg-js/enable_proto ]; then
 fi
 export NODE_OPTIONS
 
+# depends on autopkgtest timeout instead of upstream that do not run on slow target
+TAP_TIMEOUT=0
+export TAP_TIMEOUT
+
 function dolink() {
 	DIR=$1
 	for f in `ls $DIR/`; do

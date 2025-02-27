@@ -239,8 +239,7 @@ This behavior is overridden if:
   destination not starting with `/` are related to arch path
   _(`/usr/share/nodejs` or `/usr/lib/<gnu-arch>/nodejs`)_
 
-> To install a component in another directory, set its files in
-**debian/install**.
+**NB**: To install a component in another directory, set its files in **debian/install**.
 
 Example:
 
@@ -392,7 +391,8 @@ See related manpages.
 * **pkgjs-run**: same as `npm run`
 * **pkgjs-lerna run**: same as `lerna run` _(only run command is implemented)_
 * **pkgjs-utils**, **pkgjs-ln**, **pkgjs-main**, **pkgjs-pjson**: various
-  utilities. See `pkgjs-utils(1)` manpage.
+  utilities. See `pkgjs-utils(1)` manpage
+* **pkgjs**: try to reproduce `yarnpkg(1)` commands with `pkgjs-*` scripts.
 
 ## SEE ALSO
 
@@ -415,6 +415,7 @@ pkgjs-depends(1), pkgjs-audit(1), pkgjs-utils(1), pkgjs-install(1)
 | getFromNpmCache                  |      0.14.32    |
 | mjs2cjs                          |      0.12.3     |
 | mjs2cjs -a                       |      0.14.14    |
+| pkgjs                            |      0.15.21    |
 | pkgjs-audit                      |      0.11.2     |
 | pkgjs-depends                    |      0.9.54     |
 | pkgjs-depends --graph            |      0.14.34    |

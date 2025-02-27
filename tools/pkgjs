@@ -1,0 +1,223 @@
+#!/usr/bin/perl
+
+use strict;
+use Debian::PkgJs::Version;
+use File::Which;
+
+my @ignoredCommands = qw(
+  cache
+  config
+  dedupe
+);
+
+my @commands = qw(
+  audit
+  bin
+  depends
+  easy-to-update
+  exec
+  install
+  install-minimal
+  lerna
+  ln
+  ls
+  main
+  node
+  pjson
+  rebuild
+  run
+  utils
+  version
+);
+
+my @commandsToPass = qw(
+  explain
+  info
+  init
+);
+
+my @failCommand = qw(
+  add
+  dlx
+  link
+  npm
+  pack
+  patch
+  patch-commit
+  remove
+  set
+  stage
+  unlink
+  unplug
+  up
+  why
+  constraints
+  search
+  upgrade-interactive
+  plugin
+  workspace
+  workspaces
+);
+
+my @argv;
+my $command;
+
+foreach my $arg (@ARGV) {
+    exit 0 if grep { $arg eq $_ } @ignoredCommands;
+    if ( grep { $arg eq $_ } @failCommand ) {
+        print STDERR "Unimplemented command in pkgjs, try with yarnpkg\n";
+        exit 1;
+    }
+    if ( grep { $arg eq $_ } @commandsToPass ) {
+        $command =
+            which('yarnpkg') ? 'yarnpkg'
+          : which('yarn')    ? 'yarn'
+          : which('npm')     ? 'npm'
+          :                    die(':yarnpkg not installed');
+        exec( $command, @ARGV );
+    }
+    if ( !$command and grep { $arg eq $_ } @commands ) {
+        $command = $arg;
+    }
+    else {
+        push @argv, $arg;
+    }
+    if ( !$command ) {
+        if ( $arg =~ /^-(?:-help|h)$/ ) {
+            $command = 'help';
+        }
+        elsif ( $arg =~ /^-(?:-version|v)$/ ) {
+            $command = 'version';
+        }
+    }
+}
+
+$command ||= 'install';
+
+# Now we have a knonw command and all arguments are in @argv
+
+if (
+    $command =~ qr/^(?:
+  audit
+  | depends
+  | easy-to-update
+  | install-minimal
+  | lerna
+  | ln
+  | ls
+  | main
+  | pjson
+  | run
+  | utils
+)$/xx
+  )
+{
+    exec( "pkgjs-$command", @argv );
+}
+else {
+    my $kc = {
+        bin => sub {
+            exec( 'which', @_ );
+        },
+        exec => sub {
+            exec( 'node', @_ );
+        },
+        install => sub {
+            if ( $ENV{PKGJS_INSTALL_OPTS} ) {
+                exec( 'pkgjs-install',
+                    ( split /\s+/, $ENV{PKGJS_INSTALL_OPTS} ) );
+            }
+            else {
+                exec('pkgjs-install-minimal');
+            }
+        },
+        node => sub {
+            exec( 'node', @_ );
+        },
+        rebuild => sub {
+            exec( 'pkgjs-run', 'build' );
+        },
+        version => sub {
+            print "$VERSION\n";
+            exit 0;
+        },
+        help => sub {
+            print <<'EOF';
+pkgjs is a wrapper that emulates yarnpkg, to be used during package build.
+EOF
+        },
+    };
+    if ( $kc->{$command} ) {
+        $kc->{$command}->(@argv);
+    }
+    else {
+        print STDERR "Unknown command $command\n";
+        exit 1;
+    }
+}
+
+=head1 NAME
+
+pkgjs - Wrapper to pkgjs-* commands, used to replace yarn during Debian
+packages build.
+
+=head1 DESCRIPTION
+
+pkgjs is a wrapper to pkgjs-* commands. For example C<pkgjs ln yargs> launches
+C<pkgjs-ln yargs>. For some commands, it launches L<yarnpkg(1)> or L<npm(1)>
+if available.
+
+=over
+
+=item * Ignored commands I<(do nothing)>: B<cache>, B<config>, B<dedupe>
+
+=item * Commands passed to yarnpkg/npm: B<explain>, B<info>, B<init>
+
+=item * Direct mappings I<(launches the corresponding C<pkgjs-*> command)>:
+L<depends|pkgjs-depends(1)>, L<easy-to-update|pkgjs-easy-to-update(1)>,
+L<install-minimal|pkgjs-install-minimal(1)>, L<lerna|pkgjs-lerna(1)>,
+L<ln|pkgjs-ln(1)>, L<ls|pkgjs-ls(1)>, L<main|pkgjs-main(1)>,
+L<pjson|pkgjs-pjson(1)>, L<run|pkgjs-run(1)>, L<utils|pkgjs-utils(1)>
+
+=item * More complex mappings:
+
+=over
+
+=item * B<bin>: launches L<which(1)>
+
+=item * B<exec>: launches L<nodejs(1)>
+
+=item * B<install>:
+
+=over
+
+=item * if C<PKGJS_INSTALL_OPTS> environment variable is set,
+launches L<pkgjs-install(1)> with C<PKGJS_INSTALL_OPTS> and given arguments
+
+=item * else launches L<pkgjs-install-minimal(1)>
+
+=back
+
+=back
+
+=back
+
+All other commands will fail.
+
+=head1 AUTHOR
+
+Yadd <yadd@debian.org>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2021 by Yadd <yadd@debian.org>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2, or (at your option)
+any later version.
+.
+On Debian systems, the complete text of version 2 of the GNU General
+Public License can be found in `/usr/share/common-licenses/GPL-2'
+
+=cut

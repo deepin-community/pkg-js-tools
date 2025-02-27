@@ -1,6 +1,26 @@
 #!/bin/bash
 
+set -e
+
+NOFAILONMISSING=no
+if test "$1" = "--if-exist"; then
+	shift
+	NOFAILONMISSING=yes
+fi
+
 TARGET=$1
+shift
+
+ARGS=""
+FOUND=0
+while [ "$1" != "" ]; do
+        if [ "$1" == "--" ]; then
+                FOUND=1
+        elif [ $FOUND != 0 ]; then
+                ARGS="$ARGS $1"
+        fi
+        shift
+done
 
 function usage() {
 	cat <<EOT
@@ -21,23 +41,27 @@ if test "$TARGET" = ""; then
 	usage
 	exit 1
 fi
-if test "$1" = "--help" || test "$1" = "-h"; then
+if test "$TARGET" = "--help" || test "$TARGET" = "-h"; then
 	usage
 	exit
 fi
-if test "$1" = "--version"; then
+if test "$TARGET" = "--version" || test "$TARGET" = "-v"; then
     perl -MDebian::PkgJs::Version -le 'print $VERSION'
     exit
 fi
 
-COMMAND=`pkgjs-pjson . scripts $TARGET|perl -pe 's/\bp?npm\s+run\b/pkgjs-run/g;s/\blerna\s+run\b/pkgjs-lerna run/g;s/\bp?npm\s+install\b/pkgjs-install --ignore --no-download/g'`
+COMMAND=`pkgjs-pjson . scripts $TARGET|perl -pe 's/cross-env//g;s/\bp?npm\b/pkgjs/g;s/\byarn\b/pkgjs/g;s/\blerna\s+run\b/pkgjs-lerna run/g'`
 if test "$COMMAND" = ""; then
 	echo "Target $TARGET is not defined in package.json" >&2
-	exit 1
+	if test "$NOFAILONMISSING" = "no"; then
+		exit 1
+	else
+		exit 0
+	fi
 fi
 
 # Fake git / husky
-BADCOMMANDS="git husky su sudo"
+BADCOMMANDS=${BADCOMMANDS:-"git husky su sudo"}
 mkdir -p node_modules/.bin || true
 for command in $BADCOMMANDS; do
 	rm -f node_modules/.bin/$command
@@ -45,16 +69,32 @@ for command in $BADCOMMANDS; do
 done
 
 # Aliases
-ALIASES="babel,/usr/bin/babeljs"
+ALIASES=${ALIASES:-"babel,/usr/bin/babeljs yarn,/usr/bin/pkg npm,/urn/bin/pkg pnpm,/usr/bin/pkg"}
 for pair in $ALIASES; do
 	rm -f node_modules/.bin/${pair%,*}
 	ln -s ${pair#*,} node_modules/.bin/${pair%,*}
+	BADCOMMANDS="$BADCOMMANDS ${pair%,*}"
 done
+
+NAME=`pkgjs-pjson . name`
+VERSION=`pkgjs-pjson . version`
+
+if test "$VERSION" != ""; then
+	NAME="$NAME@$VERSION"
+fi
 
 # Main: launch wanted command
 export PATH="node_modules/.bin:$PATH"
 CODE=0
-sh -c "KEEP_COMMAND_LINKS=1 $COMMAND" || CODE=$?
+
+# Same output than "npm run"
+echo
+if test "$NAME" != ""; then
+	echo "> $NAME $TARGET"
+fi
+echo "> $COMMAND $ARGS"
+echo
+sh -c "KEEP_COMMAND_LINKS=1 $COMMAND $ARGS" || CODE=$?
 
 # Clean our stuff
 if test "$KEEP_COMMAND_LINKS" = ""; then

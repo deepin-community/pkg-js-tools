@@ -1,7 +1,6 @@
 Tests: build
 Depends: build-essential
  , dpkg-dev
- , fakeroot
  , grunt
  , gulp
  , node-grunt-contrib-concat

@@ -461,6 +461,7 @@ sub _extLinks {
             if ( -e "debian/nodejs/$dir/ext$type" ) {
 
                 # read debian/nodejs/{extlinks,extcopies}
+                my $exit = 0;
                 map {
 
                     # Drop "  test" if exists
@@ -508,21 +509,24 @@ sub _extLinks {
                                 );
                                 if ( $? or not $src ) {
                                     print STDERR "### $_ isn't available too\n";
-                                    exit 1;
+                                    $exit++;
                                 }
                                 print STDERR "### You SHOULD update your "
                                   . "debian/nodejs/$dir/ext$type file!\n";
                             }
                             else {
-                                exit 1;
+                                $exit++;
                             }
                         }
-                        chomp $src;
-                        my $tmp = $src;
-                        $tmp =~ s#^.*?nodejs/##;
-                        $cmds{$type}->( $src, $tmp );
+                        else {
+                            chomp $src;
+                            my $tmp = $src;
+                            $tmp =~ s#^.*?nodejs/##;
+                            $cmds{$type}->( $src, $tmp );
+                        }
                     }
                 } open_file("debian/nodejs/$dir/ext$type");
+                exit $exit if $exit;
             }
         }
     }

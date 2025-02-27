@@ -26,7 +26,7 @@ when API change.
 Option "-a" is usable if and only if module is a pure ES module (declared as
 type:module in package.json).
 
-Copyright (C) 2022 Yadd <yadd@debian.org>
+Copyright (C) Yadd <yadd@debian.org>
 
 Licensed under GPL-2+ (see /usr/share/common-licenses/GPL-2)
 EOF

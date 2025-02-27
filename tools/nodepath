@@ -68,7 +68,7 @@ if test "$MODULE" = ""; then
 fi
 
 if test "$NOBUILTIN" = "0"; then
-if node -e 'process.exit(!require("module").builtinModules.includes(process.argv[1]))' $MODULE; then
+if node -e 'process.exit(require("module").builtinModules.includes(process.argv[1]) ? 0 : 1)' $MODULE; then
 	if test "$TS" = "1"; then
 		MODULE="/usr/share/nodejs/@types/node"
 	fi

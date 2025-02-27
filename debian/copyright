@@ -3,7 +3,7 @@ Upstream-Name: pkg-js-tools
 Source: https://salsa.debian.org/js-team/pkg-js-tools
 
 Files: *
-Copyright: 2019-2020, Yadd <yadd@debian.org>
+Copyright: Yadd <yadd@debian.org>
 License: GPL-2+
 
 Files: lintian/*
@@ -12,7 +12,7 @@ Copyright: 2013, Niels Thykier <niels@thykier.net>
            2013, 2014, Axel Beckert <abe@debian.org>
            2014, Damyan Ivanov <dmn@debian.org>
            2018, Florian Schlichting <fsfs@debian.org>
-           2019-2021, Yadd <yadd@debian.org>
+           2019-2024, Yadd <yadd@debian.org>
 License: GPL-2+
 
 Files: tools/dh-make-node

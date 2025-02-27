@@ -1,3 +1,5 @@
+esbuild
+node-esbuild
 node-rollup-plugin-node-resolve
 webpack
 browserify

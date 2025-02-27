@@ -14,60 +14,66 @@ our $BUILTUSING = {};
 our $PACKAGES   = {};
 our $PATHS      = {};
 
-my $WEBPACKS = qr/^.*\b(?:node-rollup-plugin-node-resolve|browserify(?:-lite)?|webpack)\b.*/i;
+my $WEBPACKS = qr/^.*\b(?:node-(?:rollup-plugin-node-resolve|esbuild)|browserify(?:-lite)?|esbuild|webpack)\b.*/i;
 *debug = \&Debian::PkgJs::Utils::debug;
 
 sub nodepathNoError {
-    my ( $related, @mods ) = @_;
-    my ( %res, @PIDS );
-    foreach my $mod (@mods) {
-        if ( $PATHS->{$mod} and ( $related or $PACKAGES->{$mod} ) ) {
-            $res{$mod} = [ $PACKAGES->{$mod}, $PATHS->{$mod} ];
+    my ( $related, $jobs, @mods ) = @_;
+    $jobs ||= 1;
+    my (%res);
+    while (@mods) {
+        my @PIDS;
+        my @list = splice @mods, 0, $jobs;
+        foreach my $mod (@list) {
+            if ( $PATHS->{$mod} and ( $related or $PACKAGES->{$mod} ) ) {
+                $res{$mod} = [ $PACKAGES->{$mod}, $PATHS->{$mod} ];
+            }
+            else {
+                my ( $read, $null );
+                $read = IO::Handle->new;
+                open $null, '>', '/dev/null';
+                push @PIDS,
+                  [
+                    $mod,
+                    spawn(
+                        exec =>
+                          [ 'nodepath', ( $related ? '-pr' : '-p' ), $mod ],
+                        to_pipe         => $read,
+                        error_to_handle => $null,
+                        wait_child      => 0,
+                    ),
+                    $read, $null,
+                  ];
+            }
         }
-        else {
-            my ( $read, $null );
-            $read = IO::Handle->new;
-            open $null, '>', '/dev/null';
-            push @PIDS,
-              [
-                $mod,
-                spawn(
-                    exec => [ 'nodepath', ( $related ? '-pr' : '-p' ), $mod ],
-                    to_pipe         => $read,
-                    error_to_handle => $null,
-                    wait_child      => 0,
-                ),
-                $read, $null,
-              ];
-        }
-    }
-    foreach (@PIDS) {
-        my ( $mod, $pid, $out, $null ) = @$_;
-        use Data::Dumper;
-        eval {
-            my $p = wait_child( $pid, cmdline => 'z' );
-            my ( $pkg, $path ) = split /: /, <$out>;
-            chomp $path;
+        foreach (@PIDS) {
+            my ( $mod, $pid, $out, $null ) = @$_;
+            eval {
+                my $p = wait_child( $pid, cmdline => 'z' );
+                my ( $pkg, $path ) = split /: /, <$out>;
+                chomp $path;
 
-            # Fix reproducibility
-            unless ( $path =~ s#.*(/usr/(?:share|lib(?:/[^/]+)?)/nodejs/)#$1# )
-            {
-                $path =~ s#^/.*$#node_modules/$mod#;
-            }
-            $PACKAGES->{$mod} = $pkg if $pkg;
-            if ($path) {
-                $PATHS->{$mod} = $path;
-                $res{$mod} = [ $pkg, $path ];
-            }
-        };
-        close $out;
-        close $null;
+                # Fix reproducibility
+                unless (
+                    $path =~ s#.*(/usr/(?:share|lib(?:/[^/]+)?)/nodejs/)#$1# )
+                {
+                    $path =~ s#^/.*$#node_modules/$mod#;
+                }
+                $PACKAGES->{$mod} = $pkg if $pkg;
+                if ($path) {
+                    $PATHS->{$mod} = $path;
+                    $res{$mod} = [ $pkg, $path ];
+                }
+            };
+            close $out;
+            close $null;
+        }
     }
     return \%res;
 }
 
 sub buildPackageLock {
-    my ( $src, $dst, $check ) = @_;
+    my ( $src, $dst, $check, $jobs ) = @_;
     die 'Destination needed' unless $dst;
     if ($check) {
         return unless search_bd_in_debian_control($WEBPACKS);
@@ -94,8 +100,11 @@ sub buildPackageLock {
     };
     my $count = 0;
     if ( $deps and %$deps ) {
-        my $nodePaths = nodepathNoError( 1,
-            map { -d "node_modules/$_" ? () : $_ } keys %$deps );
+        my $nodePaths = nodepathNoError(
+            1,
+            ( $jobs // 1 ),
+            map { -d "node_modules/$_" ? () : $_ } keys %$deps
+        );
         foreach my $dep ( keys %$deps ) {
             my ( $out, $err );
             if ( -d "node_modules/$dep" ) {
@@ -131,7 +140,7 @@ sub buildPackageLock {
 
 sub builtUsing {
     my %res;
-    my $nodePaths = nodepathNoError( 0, keys %$BUILTUSING );
+    my $nodePaths = nodepathNoError( 0, ( $_[0] // 1 ), keys %$BUILTUSING );
     map {
         my ( $pkg, $version, $err );
         if ( $pkg = $nodePaths->{$_}->[0] ) {

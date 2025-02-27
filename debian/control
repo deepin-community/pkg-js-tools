@@ -5,24 +5,25 @@ Section: devel
 Testsuite: autopkgtest-pkg-perl
 Priority: optional
 Build-Depends: debhelper-compat (= 13)
-Build-Depends-Indep: devscripts
- , git <!nocheck>
+Build-Depends-Indep: git <!nocheck>
+ , devscripts
  , help2man
- , node-marked-man (>= 1.3.1~) <!nodoc>
  , libcache-cache-perl
  , libdebian-copyright-perl <!nocheck>
  , libdebian-source-perl <!nocheck>
- , libgraph-perl <!nocheck>
+ , libdpkg-perl
+ , libgraph-perl
  , libipc-run-perl <!nocheck>
  , libjson-perl
  , libprogress-any-output-termprogressbarcolor-perl
  , libregexp-assemble-perl
  , libtest-output-perl <!nocheck>
+ , libwww-perl
  , libyaml-perl <!nocheck>
- , node-types-node <!nocheck>
+ , node-marked-man (>= 1.3.1~) <!nodoc>
  , nodejs:any
  , perl:any
-Standards-Version: 4.6.1
+Standards-Version: 4.6.2
 Vcs-Browser: https://salsa.debian.org/js-team/pkg-js-tools
 Vcs-Git: https://salsa.debian.org/js-team/pkg-js-tools.git
 Homepage: https://salsa.debian.org/js-team/pkg-js-tools
@@ -30,27 +31,28 @@ Rules-Requires-Root: no
 
 Package: dh-nodejs
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
  , ${perl:Depends}
  , debhelper
  , libdebian-copyright-perl
  , libdebian-source-perl
  , libdpkg-perl
+ , libfile-which-perl
  , libgraph-perl
  , libipc-run-perl
  , libjson-perl
  , libyaml-perl
- , nodejs:any | nodejs (<<12.22.5~dfsg-4~)
-Provides: dh-sequence-nodejs (= ${binary:Version})
- , dh-sequence-nodejs-no-lerna (= ${binary:Version})
-Suggests: pkg-js-tools
- , node-rollup-plugin-commonjs
+ , nodejs:any
+Suggests: node-rollup-plugin-commonjs
  , node-rollup-plugin-node-resolve
+ , pkg-js-tools
  , rollup
-Breaks: nodejs-dev (<<10.15.0~dfsg-10)
 Conflicts: pkg-js-tools (<< 0.14.0~)
+Provides: dh-nodejs-autodocs
+ , dh-sequence-nodejs (= ${binary:Version})
+ , dh-sequence-nodejs-no-lerna (= ${binary:Version})
 Replaces: pkg-js-tools (<< 0.14.0~)
-Multi-Arch: foreign
 Description: debhelper addon to build Node.js modules
  dh-nodejs provides debhelper files (set dh-sequence-nodejs into build
  dependencies) to automatically:
@@ -68,8 +70,11 @@ Description: debhelper addon to build Node.js modules
 
 Package: pkg-js-tools
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
  , dh-nodejs (= ${binary:Version})
+ , libdpkg-perl
+ , libwww-perl
 Recommends: apt-file
  , devscripts
  , libcache-cache-perl
@@ -79,8 +84,7 @@ Recommends: apt-file
  , npm
 Suggests: autodep8
  , git-buildpackage
- , lintian (>= 2.58.0~)
-Multi-Arch: foreign
+ , lintian
 Description: collection of tools to aid packaging Node.js modules in Debian
  The Debian JavaScript Maintainers work on packaging JavaScript libraries
  for Debian. This collection contains tools which help the tam with
@@ -110,6 +114,8 @@ Description: collection of tools to aid packaging Node.js modules in Debian
     a "npm ls" that search also in Debian directories (npm, node-semver)
   * pkgjs-utils:
     various little utilities
+  * pkgjs:
+    emulates yarnpkg in a Debian environment
  .
  and also:
   * a salsa(1) configuration file for Debian JavaScript Maintainers
