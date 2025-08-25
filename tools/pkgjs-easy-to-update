@@ -13,7 +13,8 @@ use LWP::UserAgent;
 use Regexp::Assemble;
 
 my $ra = Regexp::Assemble->new;
-map { $ra->add($_) } ( keys %{$Debian::PkgJs::Banned::BANNED} ), qw(ws-iconv);
+map { $ra->add($_) } ( keys %{$Debian::PkgJs::Banned::BANNED} ),
+  qw(ws-iconv perlnavigator);
 my $BANNED = '^' . $ra->as_string . '$';
 $BANNED = qr/$BANNED/;
 our $cache = Debian::PkgJs::Cache->new;
@@ -21,7 +22,7 @@ our $cache = Debian::PkgJs::Cache->new;
 my $content;
 my $ua = LWP::UserAgent->new( timeout => 10 );
 $ua->env_proxy;
-my $dir = tempdir();# CLEANUP => 1 );
+my $dir = tempdir();    # CLEANUP => 1 );
 my %opt;
 
 # 1 - Get options
@@ -53,14 +54,17 @@ elsif ( $opt{v} ) {
 }
 
 print STDERR "Be patient, this process can take a long time.\n";
+
 # 2 - Get list of package with a new version from UDD
 {
-    my $response = $ua->get('https://udd.debian.org/dmd/?email1=pkg-javascript-devel%40lists.alioth.debian.org&format=json');
+    my $response = $ua->get(
+'https://udd.debian.org/dmd/?email1=pkg-javascript-devel%40lists.alioth.debian.org&format=json'
+    );
     if ( $response->is_success ) {
-        $content = JSON::from_json($response->decoded_content);
+        $content = JSON::from_json( $response->decoded_content );
     }
     else {
-        die "Unable to get list from udd.debian.org: ".$response->status_line;
+        die "Unable to get list from udd.debian.org: " . $response->status_line;
     }
 }
 print STDERR "Got UDD list, building package.json\n";
@@ -107,8 +111,9 @@ while (1) {
 
     my $stderr;
     spawn(
-        exec =>
-          [qw(npm i --package-lock-only --legacy-peer-deps --ignore-scripts)],
+        exec => [
+            qw(npm i --package-lock-only --legacy-peer-deps --ignore-scripts --force)
+        ],
         wait_child      => 1,
         nocheck         => 1,
         error_to_string => \$stderr,
@@ -125,7 +130,7 @@ while (1) {
 
 if ( $opt{a} ) {
     spawn(
-        exec       => [ qw(npm audit --package-lock-only --ignore-scripts --json) ],
+        exec => [qw(npm audit --package-lock-only --ignore-scripts --json)],
         wait_child => 1,
     );
     exit;

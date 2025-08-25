@@ -7,7 +7,7 @@ use Debian::PkgJs::Lib;
 use Debian::PkgJs::Npm;
 use Debian::PkgJs::Version;
 use File::Basename qw(basename);
-use POSIX qw(strftime);
+use POSIX          qw(strftime);
 
 my $basename = basename($0);
 
@@ -199,8 +199,8 @@ if (   $upstream_vcs_type
     && $upstream_vcs_url =~ /github/ )
 {
     open( $out, '>', 'debian/watch' );
-    print $out "version=4\n";
-    print $out git_watch($upstream_vcs_url);
+    print $out "Version: 5\n";
+    print $out git_watch( $upstream_vcs_url, undef, undef, undef, undef, 5 );
     close $out;
 }
 

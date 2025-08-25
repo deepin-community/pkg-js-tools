@@ -1,10 +1,19 @@
+pkg-js-tools (0.16.0) unstable; urgency=medium
+
+  * Compatibility with debian/watch version 5
+  * Add libio-string-perl into test deps
+
+ -- Yadd <yadd@debian.org>  Sun, 17 Aug 2025 13:28:18 +0200
+
 pkg-js-tools (0.15.23) unstable; urgency=medium
 
-  * Team upload
-  * Set TAP_TIMEOUT to 0 (no timeout), and depends on autopkgtest
-    timeout instead.
+  [ Yadd ]
+  * pkgjs-easy-to-update: ban perlnavigator and add "--force" to "npm i"
 
- -- Bastien Roucariès <rouca@debian.org>  Mon, 05 Aug 2024 10:05:22 +0000
+  [ Julian Gilbey ]
+  * Use source package names into ${nodejs:BuiltUsing} (Closes: #1110204)
+
+ -- Yadd <yadd@debian.org>  Fri, 01 Aug 2025 09:28:52 +0200
 
 pkg-js-tools (0.15.22) unstable; urgency=medium
 

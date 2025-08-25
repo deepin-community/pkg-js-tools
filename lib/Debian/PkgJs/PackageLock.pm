@@ -14,7 +14,8 @@ our $BUILTUSING = {};
 our $PACKAGES   = {};
 our $PATHS      = {};
 
-my $WEBPACKS = qr/^.*\b(?:node-(?:rollup-plugin-node-resolve|esbuild)|browserify(?:-lite)?|esbuild|webpack)\b.*/i;
+my $WEBPACKS =
+qr/^.*\b(?:node-(?:rollup-plugin-node-resolve|esbuild)|browserify(?:-lite)?|esbuild|webpack)\b.*/i;
 *debug = \&Debian::PkgJs::Utils::debug;
 
 sub nodepathNoError {
@@ -139,25 +140,30 @@ sub buildPackageLock {
 }
 
 sub builtUsing {
-    my %res;
+    my ( %res, %seen );
     my $nodePaths = nodepathNoError( 0, ( $_[0] // 1 ), keys %$BUILTUSING );
     map {
-        my ( $pkg, $version, $err );
+        my ( $pkg, $version_source, $err );
         if ( $pkg = $nodePaths->{$_}->[0] ) {
             eval {
-                unless ( $res{$pkg} ) {
+                unless ( $seen{$pkg} ) {
                     spawn(
                         exec => [
-                            'dpkg-query', '--showformat=${Version}',
+                            'dpkg-query', '--showformat=${Version},${Source}',
                             '--show',     $pkg,
                         ],
                         wait_child      => 1,
-                        to_string       => \$version,
+                        to_string       => \$version_source,
                         error_to_string => \$err,
                     );
-                    chomp $version;
-                    $res{$pkg} = $version;
-                    debug("Add $pkg (= $version) in \${nodejs:BuiltUsing}");
+                    chomp $version_source;
+                    my @vs = split /,/, $version_source;
+
+                    # Source is empty if the binary package has the same name
+                    $vs[1] ||= $pkg;
+                    $res{ $vs[1] } = $vs[0];
+                    $seen{$pkg} = 1;
+                    debug("Add $vs[1] (= $vs[0]) in \${nodejs:BuiltUsing}");
                 }
             };
         }

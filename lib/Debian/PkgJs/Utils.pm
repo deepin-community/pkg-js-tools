@@ -181,7 +181,7 @@ sub component_list {
         $packages{$dir} = $package;
     };
     if ( -e 'debian/watch' ) {
-        map { push @components, $1 if (/^[^#]*component=([\w\-\.]+)/) }
+        map { push @components, $1 if (/^[^#]*component[:=]\s*([\w\-\.]+)/i) }
           open_file('debian/watch');
     }
     if ( $lerna
@@ -678,10 +678,11 @@ sub ordered_components_list {
         my ($cmp) = @_;
         return () unless -d $cmp;
         my $name = pjson($cmp)->{name};
-        my @deps = sort ( ( keys %{ pjson($cmp)->{dependencies} // {} } ),
-            ( keys %{ pjson($cmp)->{devDependencies}  // {} } ),
-            ( keys %{ pjson($cmp)->{peerDependencies} // {} } ),
-        );
+        my @deps = sort ( (
+                ( keys %{ pjson($cmp)->{dependencies}     // {} } ),
+                ( keys %{ pjson($cmp)->{devDependencies}  // {} } ),
+                ( keys %{ pjson($cmp)->{peerDependencies} // {} } ),
+        ) );
         map {
             my $s = $components->{$_};
 
