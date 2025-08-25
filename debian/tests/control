@@ -13,6 +13,7 @@ Depends: @
  , devscripts
  , libconfig-inifiles-perl
  , libfile-copy-recursive-perl
+ , libio-string-perl
 Restrictions: needs-internet, allow-stderr
 
 Tests: pkg-js-autopkgtest

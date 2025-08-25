@@ -194,11 +194,11 @@ elsif ( $opt{r} ) {
         local $/ = '';
         open $f, 'debian/watch';
         while ( my $wline = <$f> ) {
-            if ( $wline =~ /component=\w.*component=\w/s ) {
+            if ( $wline =~ /component\s*[=:]\s*\w.*component\s*[=:]\s*\w/si ) {
                 print STDERR "Unable to parse this:\n$wline\nAborting...\n";
                 exit 1;
             }
-            if ( grep { $wline =~ /component\s*=\s*$_\b/s }
+            if ( grep { $wline =~ /component\s*[:=]\s*$_\b/si }
                 @components_changed )
             {
                 $removed_from_watch .= $wline;
@@ -307,21 +307,31 @@ else {
                   )
             );
         }
+        my $f;
+        open $f, '<', 'debian/watch' or die $!;
+        my $dwatchVersion;
+        do {
+            my $tmp = <$f>;
+            next unless $tmp =~ /^\s*version\s*[:=]\s*(\d+)/i;
+            $dwatchVersion = $1;
+        } while ( !$dwatchVersion and !$f->eof );
+        $f->close;
+        die 'No version found in debian/watch' unless $dwatchVersion;
         my $cmp_watch = "\n"
           . (
             ( not $opt{forcegithub} and ( $check or $opt{forcenpm} ) )
             ? registry_watch(
-                $cmp,    $cmpname,
-                $target, $wanted_versions{$cmp},
-                $opt{'no-ctype'}
+                $cmp,             $cmpname,
+                $target,          $wanted_versions{$cmp},
+                $opt{'no-ctype'}, $dwatchVersion,
               )
             : git_watch(
                 $res->{$cmp}->{npmrepo}, $cmpname,
                 $target,                 $wanted_versions{$cmp},
                 $after_v{$cmp},          $opt{'no-ctype'},
+                $dwatchVersion,
             )
           );
-        my $f;
         open $f, '>>', 'debian/watch' or die $!;
         print $f $cmp_watch;
         close $f;
@@ -503,7 +513,10 @@ sub getWatchLines {
         }
     );
     die "Uscan initialization failed" if $watchFile->status;
-    my $watchLines = $watchFile->watchlines;
+    my $watchLines =
+        $watchFile->can('watchSources')
+      ? $watchFile->watchSources
+      : $watchFile->watchlines;
     return ( $watchLines, $watchFile );
 }
 

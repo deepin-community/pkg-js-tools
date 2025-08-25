@@ -87,21 +87,39 @@ sub git_last_version {
 }
 
 sub git_watch {
-    my ( $repo, $component, $type, $version, $after, $noctype ) = @_;
-    $version   = $version   ? "v?($version(?:\.[\\d\\.]+)?)" : "v?([\\d\\.]+)";
-    $component = $component ? "component=$component,\\\n"    : '',
-      $type = $type ? " $type" : '';
-    $component .= "ctype=nodejs,\\\n" unless ($noctype);
+    my ( $repo, $component, $type, $version, $after, $noctype, $dwatchVersion )
+      = @_;
+    $version = $version ? "v?($version(?:\.[\\d\\.]+)?)" : "v?([\\d\\.]+)";
+    if ( $dwatchVersion && $dwatchVersion > 4 ) {
+        $component = $component ? "Component: $component\n" : '';
+        $type      = $type      ? "Version-Schema: $type\n" : '';
+        $component .= "Ctype: nodejs\n" unless ($noctype);
+    }
+    else {
+        $component = $component ? "component=$component,\\\n" : '';
+        $type      = $type      ? " $type"                    : '';
+        $component .= "ctype=nodejs,\\\n" unless ($noctype);
+    }
     my $name = $repo;
     $name =~ s#.*/([^/]+)/?#$1#;
     $name ||= "to-be-fixed";
-    if ( $repo =~ /github/ ) {
+
+    if ( $repo =~ m#github.com/([^/]+)/([^/]+)# ) {
+        my ( $own, $pj ) = ( $1, $2 );
         $after = $after ? "?after=$after" : '';
-        return <<"EOF";
+        unless ( $dwatchVersion and $dwatchVersion > 4 ) {
+            return <<"EOF";
 opts=\\
 ${component}dversionmangle=auto,\\
 filenamemangle=s/.*?(\\d[\\d\\.-]*\@ARCHIVE_EXT\@)/node-$name-\$1/ \\
  $repo/tags$after .*/archive.*/$version.tar.gz$type
+EOF
+        }
+        return <<"EOF";
+${component}Template: Github
+Owner: $own
+Project: $pj
+
 EOF
     }
     else {
@@ -110,20 +128,37 @@ EOF
 }
 
 sub registry_watch {
-    my ( $pname, $component, $type, $version, $noctype ) = @_;
+    my ( $pname, $component, $type, $version, $noctype, $dwatchVersion ) = @_;
     my $localName = $component ? "node-$component" : '@PACKAGE@';
-    $version   = $version   ? "($version(?:\.[\\d\\.]+)?)" : "([\\d\\.]+)";
-    $component = $component ? ",component=$component"      : '';
-    $type      = $type      ? " $type"                     : '';
-    $component .= ",ctype=nodejs" unless ($noctype);
+    $version = $version ? "($version(?:\.[\\d\\.]+)?)" : "([\\d\\.]+)";
+    if ( $dwatchVersion && $dwatchVersion > 4 ) {
+        $component = $component ? "Component: $component\n" : '';
+        $type      = $type      ? "Version-Schema: $type\n" : '';
+        $component .= "Ctype: nodejs\n" unless ($noctype);
+    }
+    else {
+        $component = $component ? ",component=$component" : '';
+        $type      = $type      ? " $type"                : '';
+        $component .= ",ctype=nodejs" unless ($noctype);
+    }
     my $fname = $pname;
     $fname =~ s#.*/##;
-    return <<"EOF";
+    unless ( $dwatchVersion > 4 ) {
+        return <<"EOF";
 # It is not recommended use npmregistry. Please investigate more.
 # Take a look at https://wiki.debian.org/debian/watch/
 opts="searchmode=plain$component,pgpmode=none,filenamemangle=s/^.*?(\\d[\\d\\.-]*\@ARCHIVE_EXT\@)/$localName-\$1/" \\
  https://registry.npmjs.org/$pname https://registry.npmjs.org/$pname/-/$fname-$version\@ARCHIVE_EXT\@$type
 EOF
+    }
+    return <<"EOF";
+# It is not recommended use npmregistry. Please investigate more.
+# Take a look at https://wiki.debian.org/debian/watch/
+${component}${type}Search-Mode: plain
+Pgp-Mode: node
+Filename-Mangle: s/^.*?(\\d[\\d\\.-]*\@ARCHIVE_EXT\@)/$localName-\$1/
+Source: https://registry.npmjs.org/$pname
+Matching-Pattern: https://registry.npmjs.org/$pname/-/$fname-$version\@ARCHIVE_EXT\@$type
+EOF
 }
-
 1;
